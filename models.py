@@ -25,13 +25,12 @@ class Account(Model):
 
 class Team(Model):
     """ Represents a Team that is "created-by" a single account
-        (irreplaceable), and holds all of the permissions for all sub-nodes
+        (replaceable), and holds all of the permissions for all sub-nodes
         (projects/topics etc.) against other users under this Team
     """
     LABEL = "team"
     fields = {
-        "name": str,
-        "account": str
+        "name": str
     }
 
 

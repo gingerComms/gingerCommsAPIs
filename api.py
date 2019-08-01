@@ -48,6 +48,9 @@ def register():
 def create_team(account_id):
     """ A POST endpoint used for the creation of new secondary Accounts
         linked to the currently authenticated users
+
+        TODO: Add part that verifies that this account is somehow connected
+            to the authenticated user
     """
     account = Account.filter(id=account_id)
     if not account:

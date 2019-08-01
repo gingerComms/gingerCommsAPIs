@@ -1,4 +1,4 @@
-from db import Model, Edge
+from . import Model, Edge
 
 
 class User(Model):
@@ -41,6 +41,8 @@ class UserHoldsAccount(Edge):
         account, but he can be removed from a secondary account.
     """
     LABEL = "holds"
+    OUTV_LABEL = "user"
+    INV_LABEL = "account"
     fields = {
         "relationType": str  # primary | secondary
     }
@@ -52,6 +54,8 @@ class AccountOwnsTeam(Edge):
         given Account.
     """
     LABEL = "owns"
+    OUTV_LABEL = "account"
+    INV_LABEL = "team"
     fields = {}
 
 
@@ -62,6 +66,8 @@ class UserAssignedToTeam(Edge):
         the Team
     """
     LABEL = "assigned_to"
+    OUTV_LABEL = "user"
+    INV_LABEL = "team"
     fields = {
         "role": str
     }

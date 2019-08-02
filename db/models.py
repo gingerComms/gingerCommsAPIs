@@ -1,4 +1,15 @@
-from . import Vertex, Edge
+from . import Vertex, Edge, client
+
+
+class Account(Vertex):
+    """ Represents an Account which can include an infinite number of Users
+        and keeps track of all of the usage/subscriptions for team(s) under
+        this account
+    """
+    LABEL = "account"
+    properties = {
+        "title": str,
+    }
 
 
 class User(Vertex):
@@ -13,17 +24,15 @@ class User(Vertex):
         "password": str  # This should be a string hashed using bcrypt
     }
 
+    def get_held_accounts(self):
+        """ Returns all accounts "held by" (edge) this user """
+        user_accounts_q = f"g.V().hasLabel('{self.LABEL}')" + \
+                           f".has('id', '{self.id}').out('holds')" + \
+                           f".hasLabel('{Account.LABEL}')"
+        user_accounts = client.submit(user_accounts_q).all().result()
+        user_accounts = [i["id"] for i in user_accounts]
 
-class Account(Vertex):
-    """ Represents an Account which can include an infinite number of Users
-        and keeps track of all of the usage/subscriptions for team(s) under
-        this account
-    """
-    LABEL = "account"
-    properties = {
-        "title": str,
-    }
-
+        return user_accounts
 
 class Team(Vertex):
     """ Represents a Team that is "created-by" a single account

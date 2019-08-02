@@ -126,16 +126,50 @@ def login():
     return jsonify_response(response, 200)
 
 
+@app.route("/create_account/", methods=["POST"])
+@jwt_required
+def create_account(request):
+    """ POST endpoint used for creating new secondary Accounts linked
+        to the currently authenticated user
+    """
+    user_id = get_jwt_identity()
+    user = User.filter(id=user_id)[0]
+    data = json.loads(request.data)
+
+    if 'title' not in data:
+        return jsonify_response({"errors": "`title` field is required."}, 400)
+
+    user_accounts = ",".join(f"'{i}'" for i in user.get_held_accounts())
+    user_account_names_q = f"g.V().hasLabel('{Account.LABEL}')" + \
+                           f".has('id', within({user_accounts}))" + \
+                           f".values('title')"
+    user_account_names = client.submit(user_account_names_q).all().result()
+
+    if data["title"] in user_account_names:
+        return jsonify_response(
+            {"errors": "Users with the title already exist"})
+
+    account = Account.create(title=data["title"])
+    edge = UserHoldsAccount.create(user=user.id, account=account.id,
+                                   relationType="secondary")
+
+    response = {
+        "title": account.title
+    }
+    return jsonify_response(response, 201)
+
+
 @app.route("/account/<account_id>/team", methods=["POST"])
 @jwt_required
 def create_team(account_id):
-    """ A POST endpoint used for the creation of new secondary Accounts
-        linked to the currently authenticated users
+    """ A POST endpoint used for the creation of new Teams through an account
+        linked to the currently authenticated user
 
         TODO: Add part that verifies that this account is somehow connected
             to the authenticated user
     """
     user_id = get_jwt_identity()
+    user = User.filter(id=user_id)[0]
 
     account = Account.filter(id=account_id)
     if not account:
@@ -143,11 +177,7 @@ def create_team(account_id):
     account = account[0]
 
     # Confirming that the account is a user account
-    user_accounts_q = f"g.V().hasLabel('{User.LABEL}')" + \
-                       f".has('id', '{user_id}').out('holds')" + \
-                       f".hasLabel('{Account.LABEL}')"
-    user_accounts = client.submit(user_accounts_q).all().result()
-    user_accounts = [i["id"] for i in user_accounts]
+    user_accounts = user.get_held_accounts()
     if not account.id in user_accounts:
         return jsonify_response({"error": "Account is not held by the user."},
                                 403)

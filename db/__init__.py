@@ -12,31 +12,31 @@ client = Client(
 )
 
 
-class FieldValidationMixin:
+class PropertyValidationMixin:
     """ Mixin that includes a `validate_input` classmethod meant to be
-        used to validate field data upon vertex/edge creation
+        used to validate property data upon vertex/edge creation
     """
     @classmethod
     def validate_input(cls, data):
-        """ Validates the provided data against the `fields` property
+        """ Validates the provided data against the `properties` property
             on this Vertex/Edge using basic type checking.
         """
         errors = []
         messages = {
-            "unrecognized_name": f"Field is not part of `{cls.fields}`.",
-            "invalid_type": "Field is not of type `{}`"
+            "unrecognized_name": f"Property is not part of `{cls.properties}`.",
+            "invalid_type": "Property is not of type `{}`"
         }
 
         for key, value in data.items():
-            if key not in cls.fields:
+            if key not in cls.properties:
                 errors.append({
                     key: messages["unrecognized_name"]
                 })
                 continue
-            if not isinstance(value, cls.fields[key]):
+            if not isinstance(value, cls.properties[key]):
                 errors.append({
                     key: messages["invalid_type"].format(
-                        cls.fields[key].__name__
+                        cls.properties[key].__name__
                     )
                 })
 
@@ -46,22 +46,22 @@ class FieldValidationMixin:
         return data
 
 
-class Model(FieldValidationMixin):
+class Model(PropertyValidationMixin):
     """ Base Model class that provides all methods required
         for a Vertex of this Model's label
     """
     # The LABEL of a model is equivalent to it's partition
     LABEL = None  # Needs to be overridden on all inheriting classes
-    # A dictionary with the schema of {'field_name': <field_type>}
+    # A dictionary with the schema of {'property_name': <property_type>}
     # Ex: {'name': str}
-    fields = {}
+    properties = {}
 
     def __init__(self, **kwargs):
         """ Initializes the model instances by setting attributes present
             in the kwargs
         """
         for field, value in kwargs.items():
-            if field in self.fields or field == "id":
+            if field in self.properties or field == "id":
                 setattr(self, field, value)
 
     @classmethod
@@ -124,7 +124,7 @@ class Model(FieldValidationMixin):
         return res
 
 
-class Edge(FieldValidationMixin):
+class Edge(PropertyValidationMixin):
     """ Represents a connection between two Vertices (Model Instances) """
     # Need to be overridden on all inheriting classes
     LABEL = ""

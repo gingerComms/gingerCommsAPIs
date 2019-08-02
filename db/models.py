@@ -6,9 +6,11 @@ class User(Model):
         about the User. Mainly used for Authentication
     """
     LABEL = "user"
-    fields = {
+    properties = {
         "fullName": str,
-        "email": str
+        "email": str,
+        "username": str,
+        "password": str  # This should be a string hashed using bcrypt
     }
 
 
@@ -18,7 +20,7 @@ class Account(Model):
         this account
     """
     LABEL = "account"
-    fields = {
+    properties = {
         "title": str,
     }
 
@@ -29,7 +31,7 @@ class Team(Model):
         (projects/topics etc.) against other users under this Team
     """
     LABEL = "team"
-    fields = {
+    properties = {
         "name": str
     }
 
@@ -43,7 +45,7 @@ class UserHoldsAccount(Edge):
     LABEL = "holds"
     OUTV_LABEL = "user"
     INV_LABEL = "account"
-    fields = {
+    properties = {
         "relationType": str  # primary | secondary
     }
 
@@ -56,7 +58,7 @@ class AccountOwnsTeam(Edge):
     LABEL = "owns"
     OUTV_LABEL = "account"
     INV_LABEL = "team"
-    fields = {}
+    properties = {}
 
 
 class UserAssignedToTeam(Edge):
@@ -68,6 +70,6 @@ class UserAssignedToTeam(Edge):
     LABEL = "assigned_to"
     OUTV_LABEL = "user"
     INV_LABEL = "team"
-    fields = {
+    properties = {
         "role": str
     }

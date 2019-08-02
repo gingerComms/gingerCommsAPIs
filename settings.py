@@ -1,3 +1,6 @@
+import os
+
+
 DATABASE_SETTINGS = {
     "host": "ws://localhost:8901/",
     "traversal_source": "g",
@@ -6,3 +9,4 @@ DATABASE_SETTINGS = {
     "partition_key": "category"
 }
 
+SECRET_KEY = os.environ.get("SECRET_KEY", "secret-key")

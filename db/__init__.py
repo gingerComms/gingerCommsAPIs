@@ -46,18 +46,18 @@ class PropertyValidationMixin:
         return data
 
 
-class Model(PropertyValidationMixin):
-    """ Base Model class that provides all methods required
-        for a Vertex of this Model's label
+class Vertex(PropertyValidationMixin):
+    """ Base Vertex class that provides all methods required
+        for a Vertex of this Vertex's label
     """
-    # The LABEL of a model is equivalent to it's partition
+    # The LABEL of a Vertex is equivalent to it's partition
     LABEL = None  # Needs to be overridden on all inheriting classes
     # A dictionary with the schema of {'property_name': <property_type>}
     # Ex: {'name': str}
     properties = {}
 
     def __init__(self, **kwargs):
-        """ Initializes the model instances by setting attributes present
+        """ Initializes the Vertex instances by setting attributes present
             in the kwargs
         """
         for field, value in kwargs.items():
@@ -67,7 +67,7 @@ class Model(PropertyValidationMixin):
     @classmethod
     def vertex_to_instance(cls, vertex):
         """ Receives a gremlin client vertex response as input, and generates
-            a Model instance based off of that
+            a Vertex instance based off of that
         """
         instance = cls()
         instance.id = vertex["id"]
@@ -92,9 +92,9 @@ class Model(PropertyValidationMixin):
         created_vertex = client.submit(query).one()
 
         # Creating and returning the account object created from this query
-        model_instance = cls.vertex_to_instance(created_vertex[0])
+        vertex_instance = cls.vertex_to_instance(created_vertex[0])
 
-        return model_instance
+        return vertex_instance
 
     @classmethod
     def filter(cls, **properties):
@@ -108,13 +108,13 @@ class Model(PropertyValidationMixin):
 
         results = client.submit(query).all().result()
 
-        # Converting each vertex to a Model instance
+        # Converting each vertex to a Vertex instance
         instances = [cls.vertex_to_instance(i) for i in results]
 
         return instances
 
     def delete(self):
-        """ Deletes this instance of the Model from the database """
+        """ Deletes this instance of the Vertex from the database """
         assert self.id, "Instance has not been initialized!"
 
         query = f"g.V().has('id', '{self.id}').drop()"
@@ -125,7 +125,7 @@ class Model(PropertyValidationMixin):
 
 
 class Edge(PropertyValidationMixin):
-    """ Represents a connection between two Vertices (Model Instances) """
+    """ Represents a connection between two Vertices (Vertex Instances) """
     # Need to be overridden on all inheriting classes
     LABEL = ""
     OUTV_LABEL = ""
@@ -175,7 +175,7 @@ class Edge(PropertyValidationMixin):
 
         results = client.submit(query).all().result()
 
-        # Converting each edge to a Model instance
+        # Converting each edge to an `Edge` class instance
         instances = [cls.edge_to_instance(i) for i in results]
 
         return instances

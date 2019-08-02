@@ -1,7 +1,7 @@
-from . import Model, Edge
+from . import Vertex, Edge
 
 
-class User(Model):
+class User(Vertex):
     """ Represents a base User account which contains all of the details
         about the User. Mainly used for Authentication
     """
@@ -14,7 +14,7 @@ class User(Model):
     }
 
 
-class Account(Model):
+class Account(Vertex):
     """ Represents an Account which can include an infinite number of Users
         and keeps track of all of the usage/subscriptions for team(s) under
         this account
@@ -25,7 +25,7 @@ class Account(Model):
     }
 
 
-class Team(Model):
+class Team(Vertex):
     """ Represents a Team that is "created-by" a single account
         (replaceable), and holds all of the permissions for all sub-nodes
         (projects/topics etc.) against other users under this Team

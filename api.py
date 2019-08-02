@@ -73,6 +73,14 @@ def register():
     if data.errors:
         return jsonify(data.errors), 400
 
+    # Confirming that a duplicate user doesn't exist
+    duplicates_q = f"g.V().hasLabel('{User.LABEL}')" + \
+                   f".or(has('username', '{data.data['username']}')," + \
+                   f"has('email', '{data.data['email']}'))"
+    duplicates = client.submit(duplicates_q).all().result()
+    if duplicates:
+        return jsonify_response({"error": "User already exists!"}, 400)
+
     data.data["password"] = bcrypt.generate_password_hash(
         data.data["password"]).decode("utf-8")
 
@@ -135,8 +143,9 @@ def create_team(account_id):
     account = account[0]
 
     # Confirming that the account is a user account
-    user_accounts_q = f"g.V().hasLabel('user').has('id', '{user_id}')" + \
-                       ".out('holds').hasLabel('account')"
+    user_accounts_q = f"g.V().hasLabel('{User.LABEL}')" + \
+                       f".has('id', '{user_id}').out('holds')" + \
+                       f".hasLabel('{Account.LABEL}')"
     user_accounts = client.submit(user_accounts_q).all().result()
     user_accounts = [i["id"] for i in user_accounts]
     if not account.id in user_accounts:

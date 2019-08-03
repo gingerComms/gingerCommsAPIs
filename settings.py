@@ -2,11 +2,13 @@ import os
 
 
 DATABASE_SETTINGS = {
-    "host": "ws://localhost:8901/",
+    "host": os.environ.get("DB_HOST", "ws://localhost:8901/"),
     "traversal_source": "g",
-    "username": "/dbs/tasks/colls/items",
-    "password": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==",
-    "partition_key": "category"
+    "username": os.environ.get("DB_USERNAME", "/dbs/tasks/colls/items"),
+    "password": os.environ.get("DB_PASSWORD",
+                               "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2n" +
+                               "Q9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="),
+    "partition_key": os.environ.get("DB_PARTITION_KEY", "category")
 }
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "secret-key")

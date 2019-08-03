@@ -33,18 +33,6 @@ def user_identity_lookup(user):
     """ Returns the identity field to be used in the jwt token """
     return user.id
 
-
-def authenticate(username, password):
-    """ Confirms that a user exists with a matching email and password """
-    user = User.filter(username=username)
-    if not user:
-        return None
-    user = user[0]
-
-    if bcrypt.check_password_hash(user.password, password):
-        return user
-
-
 def jsonify_response(data, status_code=200):
     """ Returns a response object with the given data of mimetype
         application/json with the given status code
@@ -104,14 +92,14 @@ def login():
         user credentials
     """
     data = json.loads(request.data)
-    username, password = data["username"], data["password"]
+    username, password = data["username"], data["password"].encode("utf-8")
 
     user = User.filter(username=username)
     if not user:
         return jsonify_response({"User doesn't exist!"}, 404)
     user = user[0]
 
-    if not bcrypt.check_password_hash(user.password, password):
+    if not bcrypt.check_password_hash(user.password.encode("utf-8"), password):
         return jsonify_response({"status": "Password invalid"}, 403)
 
     response = {
@@ -126,9 +114,9 @@ def login():
     return jsonify_response(response, 200)
 
 
-@app.route("/create_account/", methods=["POST"])
+@app.route("/create_account", methods=["POST"])
 @jwt_required
-def create_account(request):
+def create_account():
     """ POST endpoint used for creating new secondary Accounts linked
         to the currently authenticated user
     """
@@ -139,15 +127,18 @@ def create_account(request):
     if 'title' not in data:
         return jsonify_response({"errors": "`title` field is required."}, 400)
 
-    user_accounts = ",".join(f"'{i}'" for i in user.get_held_accounts())
-    user_account_names_q = f"g.V().hasLabel('{Account.LABEL}')" + \
-                           f".has('id', within({user_accounts}))" + \
-                           f".values('title')"
-    user_account_names = client.submit(user_account_names_q).all().result()
+    held_accounts = user.get_held_accounts()
+    if held_accounts:
+        user_accounts = ",".join(f"'{i}'" for i in held_accounts)
+        user_account_names_q = \
+            f"g.V().hasLabel('{Account.LABEL}')" + \
+            f".has('id', within({user_accounts}))" + \
+            f".values('title')"
+        user_account_names = client.submit(user_account_names_q).all().result()
 
-    if data["title"] in user_account_names:
-        return jsonify_response(
-            {"errors": "Users with the title already exist"})
+        if data["title"] in user_account_names:
+            return jsonify_response(
+                {"errors": "Users with the title already exist"}, 400)
 
     account = Account.create(title=data["title"])
     edge = UserHoldsAccount.create(user=user.id, account=account.id,

@@ -3,12 +3,14 @@ from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token,
     get_jwt_identity, get_jwt_claims
 )
+from flask.views import MethodView
 import json
 from db.models import *
 from serializers import *
 from flask_bcrypt import Bcrypt
 from settings import *
 from db import client
+from permissions import *
 
 
 app = Flask(__name__)
@@ -16,6 +18,13 @@ app.config['JWT_SECRET_KEY'] = SECRET_KEY
 jwt = JWTManager(app)
 
 bcrypt = Bcrypt(app)
+
+
+def jsonify_response(response, status=200):
+    """ Returns the dict response as json with the provided status code """
+    return app.response_class(
+        response=json.dumps(response),
+        status=status, mimetype="application/json")
 
 
 @jwt.user_claims_loader
@@ -32,14 +41,6 @@ def add_user_details_to_jwt_token(user):
 def user_identity_lookup(user):
     """ Returns the identity field to be used in the jwt token """
     return user.id
-
-def jsonify_response(data, status_code=200):
-    """ Returns a response object with the given data of mimetype
-        application/json with the given status code
-    """
-    return app.response_class(response=json.dumps(data),
-                              status=status_code,
-                              mimetype="application/json")
 
 
 @app.route("/", methods=["GET"])
@@ -179,10 +180,59 @@ def create_team(account_id):
         return jsonify_response(data.errors, 400)
 
     team = Team.create(**data.data)
-    edge = AccountOwnsTeam.create(account=account.id, team=team.id)
+    account_edge = AccountOwnsTeam.create(account=account.id, team=team.id)
+    user_edge = UserAssignedToTeam.create(
+        user=user.id, team=team.id, role="admin")
 
     return jsonify_response(schema.dumps(team).data, 201)
 
+
+class TeamRolesView(MethodView):
+    """ Container for all the team roles endpoint;
+            Returns the role owned by the user (current | input) on GET,
+            Adds new role on POST,
+            Removes existing role for (current | input ) user on DELETE, and
+            Updates existing role for (current | input ) user on PATCH
+    """
+    decorators = [jwt_required, any_team_role_required]
+
+    def get(self, team_id):
+        """ Returns the role owned by the current user/input user (?user)
+            arg
+        """
+        current_user = get_jwt_identity()
+        input_user = request.args.get("user", None)
+
+        team = Team.filter(id=team_id)
+        if not team:
+            return jsonify_response(
+                {"error": "Input Team does not exist."}, 404)
+        team = team[0]
+
+        if input_user:
+            target_user = User.filter(id=input_user)
+            if not target_user:
+                return jsonify_response(
+                    {"error": "Input User does not exist."}, 404)
+            target_user = target_user[0]
+
+            # Confirming that the current user has the required permissions to
+            # Access the team before giving it details about the input user
+            current_user_role = UserAssignedToTeam.get_user_assigned_role(
+                team.id, current_user)
+            if current_user_role is None:
+                return jsonify_response(
+                    {"error": "User does not the have required permissions"},
+                    403)
+        else:
+            target_user = User.filter(id=current_user)[0]
+
+        assigned_role = UserAssignedToTeam.get_user_assigned_role(
+            team.id, target_user.id)
+
+        return jsonify_response({"role": getattr(assigned_role, "role", None)})
+app.add_url_rule("/team/<team_id>/roles",
+                 view_func=TeamRolesView.as_view("team_roles"))
 
 if __name__ == "__main__":
     app.run(debug=True)

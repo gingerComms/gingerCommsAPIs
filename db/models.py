@@ -39,6 +39,19 @@ class UserAssignedToTeam(Edge):
         "role": str
     }
 
+    @classmethod
+    def get_user_assigned_role(cls, team_id, user_id):
+        """ Returns the role assigned to the user for the given team """
+        query = f"g.V().hasLabel('{Team.LABEL}').has('id', '{team_id}')" + \
+            f".in('{cls.LABEL}')"
+        result = client.submit(query).all().result()
+
+        if result:
+            result = result[0]
+            edge = UserAssignedToTeam.edge_to_instance(result)
+            return edge
+        return None
+
 
 class Account(Vertex):
     """ Represents an Account which can include an infinite number of Users

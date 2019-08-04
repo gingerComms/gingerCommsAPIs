@@ -92,5 +92,22 @@ class VpmoTestCase(TestCase):
         )
         self.assertEqual(r.status_code, 201)
 
+    """
+    def test_team_role_retrieve(self):
+        
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        team = Team.create(name="Test Team")
+
+        url = f"/team/{team.id}/roles"
+
+        r = self.client.get(
+            url,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        raise ValueError(r.status_code, r.json)
+        self.assertEqual(r.status_code, 200, r.status_code)
+    """
+
 if __name__ == "__main__":
     unittest.main()

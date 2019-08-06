@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
+import functools
 from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token,
     get_jwt_identity, get_jwt_claims
@@ -64,8 +65,8 @@ def register():
 
     # Confirming that a duplicate user doesn't exist
     duplicates_q = f"g.V().hasLabel('{User.LABEL}')" + \
-                   f".or(has('username', '{data.data['username']}')," + \
-                   f"has('email', '{data.data['email']}'))"
+        f".or(has('username', '{data.data['username']}')," + \
+        f"has('email', '{data.data['email']}'))"
     duplicates = client.submit(duplicates_q).all().result()
     if duplicates:
         return jsonify_response({"error": "User already exists!"}, 400)
@@ -151,88 +152,169 @@ def create_account():
     return jsonify_response(response, 201)
 
 
-@app.route("/account/<account_id>/team", methods=["POST"])
-@jwt_required
-def create_team(account_id):
-    """ A POST endpoint used for the creation of new Teams through an account
-        linked to the currently authenticated user
-
-        TODO: Add part that verifies that this account is somehow connected
-            to the authenticated user
+class TeamsListCreateView(MethodView):
+    """ Contains all of the Basic GET/POST methods for Listing (GET) and
+        Creating (POST) teams
     """
-    user_id = get_jwt_identity()
-    user = User.filter(id=user_id)[0]
-
-    account = Account.filter(id=account_id)
-    if not account:
-        return jsonify_response({"error": "Account does not exist!"}, 404)
-    account = account[0]
-
-    # Confirming that the account is a user account
-    user_accounts = user.get_held_accounts()
-    if not account.id in user_accounts:
-        return jsonify_response({"error": "Account is not held by the user."},
-                                403)
-
-    schema = TeamSchema()
-    data = schema.loads(request.data)
-    if data.errors:
-        return jsonify_response(data.errors, 400)
-
-    team = Team.create(**data.data)
-    account_edge = AccountOwnsTeam.create(account=account.id, team=team.id)
-    user_edge = UserAssignedToTeam.create(
-        user=user.id, team=team.id, role="admin")
-
-    return jsonify_response(schema.dumps(team).data, 201)
-
-
-class TeamRolesView(MethodView):
-    """ Container for all the team roles endpoint;
-            Returns the role owned by the user (current | input) on GET,
-            Adds new role on POST,
-            Removes existing role for (current | input ) user on DELETE, and
-            Updates existing role for (current | input ) user on PATCH
-    """
-    decorators = [jwt_required, any_team_role_required]
-
-    def get(self, team_id):
-        """ Returns the role owned by the current user/input user (?user)
-            arg
+    @jwt_required
+    @account_held_by_user
+    def get(self, account=None, user=None, account_id=None):
+        """ A GET endpoint that returns all of the teams connected to this
+            account
         """
-        current_user = get_jwt_identity()
-        input_user = request.args.get("user", None)
+        teams = AccountOwnsTeam.get_teams(account.id)
 
-        team = Team.filter(id=team_id)
-        if not team:
-            return jsonify_response(
-                {"error": "Input Team does not exist."}, 404)
-        team = team[0]
+        schema = TeamSchema(many=True)
+        return jsonify_response(schema.dumps(teams).data, 200)
+
+    @jwt_required
+    @account_held_by_user
+    def post(self, account=None, user=None, account_id=None):
+        """ A POST endpoint used for the creation of new Teams through an
+            account linked to the currently authenticated user
+        """
+        schema = TeamSchema()
+        data = schema.loads(request.data)
+        if data.errors:
+            return jsonify_response(data.errors, 400)
+
+        team = Team.create(**data.data)
+        account_edge = AccountOwnsTeam.create(account=account.id, team=team.id)
+        user_edge = UserAssignedToCoreVertex.create(
+            user=user.id, team=team.id, role="admin")
+
+        return jsonify_response(schema.dumps(team).data, 201)
+
+app.add_url_rule("/account/<account_id>/teams",
+                 view_func=TeamsListCreateView.as_view("teams"))
+
+
+class CoreVertexListCreateView(MethodView):
+    """ Contains the GET and POST views required for Listing and Creating
+        CoreVertex instances (excluding Teams since teams don't have parents)
+    """
+    @has_core_vertex_parental_permissions
+    @jwt_required
+    def get(self, vertex_type=None,
+            parent_id=None):
+        """ Returns all projects under the given parent's identifier """
+        pass
+
+    @has_core_vertex_parental_permissions
+    @jwt_required
+    def post(self, parent_vertex=None, vertex_type=None,
+             parent_id=None):
+        """ Creates the core vertex instance of the given type as well as
+            and edge from the parent to the created vertex
+        """
+        pass
+
+app.add_url_rule("/<parent_id>/<vertex_type>/",
+                 CoreVertexListCreateView.as_view("core_vertices"))
+
+
+class CoreVertexRolesView(MethodView):
+    """ Container for all the core vertices' roles endpoint;
+            Returns the role owned by the user (current | input) on GET,
+            Adds new role on POST
+    """
+    def handle_input_target_user(self, current_user_id):
+        """ Handles conditional block for fetching the "input_user" or
+            the current user based on the request query parameter
+            Returns the (<target_user>, <error>) as a tuple
+        """
+        input_user = request.args.get("user", None)
 
         if input_user:
             target_user = User.filter(id=input_user)
             if not target_user:
-                return jsonify_response(
+                return None, jsonify_response(
                     {"error": "Input User does not exist."}, 404)
             target_user = target_user[0]
-
-            # Confirming that the current user has the required permissions to
-            # Access the team before giving it details about the input user
-            current_user_role = UserAssignedToTeam.get_user_assigned_role(
-                team.id, current_user)
-            if current_user_role is None:
-                return jsonify_response(
-                    {"error": "User does not the have required permissions"},
-                    403)
         else:
-            target_user = User.filter(id=current_user)[0]
+            target_user = User.filter(id=current_user_id)[0]
 
-        assigned_role = UserAssignedToTeam.get_user_assigned_role(
-            team.id, target_user.id)
+        return target_user, None
+
+    @jwt_required
+    @any_core_vertex_role_required
+    def get(self, vertex_id=None, core_vertex=None,
+            vertex_type=None, current_user_role=None):
+        """ Returns the role owned by the current user/input user (?user)
+            arg
+        """
+        current_user = get_jwt_identity()
+
+        target_user, error = self.handle_input_target_user(current_user)
+        if error:
+            return error
+
+        assigned_role = UserAssignedToCoreVertex(inv_label=vertex_type) \
+            .get_user_assigned_role(core_vertex.id, target_user.id)
 
         return jsonify_response({"role": getattr(assigned_role, "role", None)})
-app.add_url_rule("/team/<team_id>/roles",
-                 view_func=TeamRolesView.as_view("team_roles"))
+
+    @jwt_required
+    @any_core_vertex_role_required
+    def post(self, vertex_id=None, core_vertex=None,
+             vertex_type=None, current_user_role=None):
+        """ Adds a new role (or updates the existing role) for the current or
+            input user on the given team
+        """
+        data = json.loads(request.data)
+        if "role" not in data:
+            return jsonify_response(
+                {"error": "Request must include a `role` parameter"}, 400)
+
+        current_user = get_jwt_identity()
+
+        target_user, error = self.handle_input_target_user(current_user)
+        if error:
+            return error
+
+        if target_user.id == current_user:
+            target_user_role = current_user_role
+        else:
+            target_user_role = UserAssignedToCoreVertex(
+                inv_label=vertex_type) \
+                .get_user_assigned_role(core_vertex.id, target_user.id)
+
+        # Validation for whether the user has enough permissions to even
+        # make this role update
+        requested_role = data["role"]
+        lacking_role_response = jsonify_response(
+            {"error": "User lacks the required role for the role requested."},
+            403)
+        if current_user_role.role == "member":
+            # Since members can't change ANY roles
+            return lacking_role_response
+        elif current_user_role.role == "lead" and (
+                requested_role == "admin" or requested_role == "lead"):
+            # Since leads can only control member roles
+            return lacking_role_response
+        elif current_user_role.role == "admin":
+            # Since admins can do it all
+            pass
+
+        # Removing all existing edges for the target user against this vertex
+        if target_user_role is not None:
+            target_user_role.delete()
+
+        # Creating a new assignment for the teamuser pair with the given role
+        edge = UserAssignedToCoreVertex(inv_label=vertex_type) \
+            .create(user=target_user.id,
+                    role=requested_role,
+                    **{vertex_type: core_vertex.id})
+
+        return jsonify_response({
+            "user": target_user.id,
+            "team": core_vertex.id,
+            "role": edge.role
+        }, 200)
+
+app.add_url_rule("/<vertex_type>/<vertex_id>/roles",
+                 view_func=CoreVertexRolesView.as_view("core_vertex_roles"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)

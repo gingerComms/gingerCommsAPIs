@@ -131,14 +131,23 @@ class Edge(PropertyValidationMixin):
     OUTV_LABEL = ""
     INV_LABEL = ""
 
+    def __init__(self, *args, outv_label=None, inv_label=None, **kwargs):
+        """ Modifiess the inv label attribute for this instance
+            The main purpose of this is to be able to use the same edge
+            methods along multiple kinds of "CoreVertices" (Team|Project|Topic)
+        """
+        self.OUTV_LABEL = outv_label or self.OUTV_LABEL
+        self.INV_LABEL = inv_label or self.INV_LABEL
+
     @classmethod
     def edge_to_instance(cls, edge):
         """ Receives a Gremlin Edge response as input and generates an Edge
             Instance based off of it
         """
-        instance = cls()
+        #raise ValueError(edge.keys())
+        instance = cls(inv_label=cls.INV_LABEL)
         instance.id = edge["id"]
-        instance.outV, instance.inV = edge["outV"], edge["inV"]
+        instance.outV, instance.inV = edge.get("outV"), edge.get("inV")
         for field, value in edge.get("properties", {}).items():
             setattr(instance, field, value)
 
@@ -150,6 +159,10 @@ class Edge(PropertyValidationMixin):
             properties between the two vertices
         """
         out_v, in_v = data.pop(cls.OUTV_LABEL), data.pop(cls.INV_LABEL)
+
+        assert isinstance(out_v, str)
+        assert isinstance(in_v, str)
+
         validated_data = cls.validate_input(data)
 
         query = f"g.V().has('id', '{out_v}').addE('{cls.LABEL}')" + \
@@ -158,7 +171,7 @@ class Edge(PropertyValidationMixin):
         for key, value in validated_data.items():
             query += f".property('{key}', '{value}')"
 
-        edge = client.submit(query).one()[0]
+        edge = client.submit(query).all().result()[0]
         instance = cls.edge_to_instance(edge)
 
         return instance

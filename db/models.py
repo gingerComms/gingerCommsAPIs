@@ -25,30 +25,40 @@ class AccountOwnsTeam(Edge):
     INV_LABEL = "team"
     properties = {}
 
+    @classmethod
+    def get_teams(cls, account_id):
+        """ Returns all teams owned by this account id """
+        query = f"g.V().hasLabel('{Account.LABEL}')" + \
+            f".has('id', '{account_id}').out('{cls.LABEL}')"
+        results = client.submit(query).all().result()
 
-class UserAssignedToTeam(Edge):
-    """ Represents a user -> team connection from an Account's User to a
-        Team.
-        Only Users that HOLD the Account that OWNS the Team can be ASSIGNED_TO
-        the Team
+        return [Team.vertex_to_instance(i) for i in results]
+
+
+class UserAssignedToCoreVertex(Edge):
+    """ Represents a user -> team|project|topic connection from an Account's
+        User to a Team, Project or a Topic.
     """
     LABEL = "assigned_to"
     OUTV_LABEL = "user"
-    INV_LABEL = "team"
+    INV_LABEL = "team"  # This should be overridden during init
     properties = {
-        "role": str
+        "role": str  # admin | lead | member
     }
 
     @classmethod
-    def get_user_assigned_role(cls, team_id, user_id):
-        """ Returns the role assigned to the user for the given team """
-        query = f"g.V().hasLabel('{Team.LABEL}').has('id', '{team_id}')" + \
-            f".in('{cls.LABEL}')"
+    def get_user_assigned_role(cls, core_vertex_id, user_id):
+        """ Returns the role (UserAssignedToCoreVertex instance) assigned
+            to the user for the given core-vertex
+        """
+        query = f"g.V().hasLabel('{cls.INV_LABEL}')" + \
+            f".has('id', '{core_vertex_id}').inE('{cls.LABEL}').as('e')" + \
+            f".outV().has('id', '{user_id}').select('e')"
         result = client.submit(query).all().result()
 
         if result:
             result = result[0]
-            edge = UserAssignedToTeam.edge_to_instance(result)
+            edge = UserAssignedToCoreVertex.edge_to_instance(result)
             return edge
         return None
 
@@ -106,3 +116,18 @@ class Team(Vertex):
 
         owner = client.submit(query).all().result()
         return Account.vertex_to_instance(owner[0])
+
+
+class Project(Vertex):
+    """ Represents a Project instance that that can serve as a parent to
+        other Nodes (Project/Topics), and have it's own `UserAssignedToX`
+        incoming edge with Users
+    """
+    LABEL = "project"
+    properties = {
+        "title": str,
+        "description": str,
+        "status": int,
+        "date_created": str,
+        "due_date": str
+    }

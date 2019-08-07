@@ -7,7 +7,8 @@ import flask
 from flask_jwt_extended import get_jwt_identity
 from flask import make_response
 import functools
-from db.models import *
+from core.models import *
+from auth.models import *
 from flask import jsonify
 
 

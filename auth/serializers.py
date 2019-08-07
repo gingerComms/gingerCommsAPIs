@@ -7,8 +7,3 @@ class UserRegistrationSchema(Schema):
     email = fields.Str(required=True)
     username = fields.Str(required=True)
     password = fields.Str(required=True)
-
-
-class TeamSchema(Schema):
-    """ Schema for the basic Team Vertex and it's endpoints """
-    name = fields.Str(required=True)

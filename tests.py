@@ -1,8 +1,9 @@
 from flask_testing import TestCase
 import unittest
 from api import app, bcrypt
-from db.models import *
-from db import client
+from auth.models import *
+from core.models import *
+from db.engine import client
 import copy
 import json
 import time
@@ -36,7 +37,7 @@ class VpmoTestCase(TestCase):
 
     def test_user_registration(self):
         """ Tests the user registration POST endpoint """
-        url = "/register"
+        url = "/auth/register"
         r = self.client.post(url, json=self.user_creds)
         self.assertEqual(r.status_code, 201)
 
@@ -48,7 +49,7 @@ class VpmoTestCase(TestCase):
                 self.user_creds["password"]).decode("utf-8")
             user = User.create(**user_creds)
 
-        url = "/login"
+        url = "/auth/login"
         r = self.client.post(url, json={
             "username": username or self.user_creds["username"],
             "password": password or self.user_creds["password"]
@@ -59,7 +60,7 @@ class VpmoTestCase(TestCase):
 
     def test_account_creation(self):
         """ Tests the Account creation POST endpoint """
-        url = "/create_account"
+        url = "/auth/create_account"
         logged_in = self.test_user_login()
         user, token = logged_in["user"]["id"], logged_in["token"]
 

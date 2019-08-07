@@ -1,4 +1,5 @@
-from . import Vertex, Edge, client
+from db.engine import Vertex, Edge, client
+import core
 
 
 class UserHoldsAccount(Edge):
@@ -32,7 +33,16 @@ class AccountOwnsTeam(Edge):
             f".has('id', '{account_id}').out('{cls.LABEL}')"
         results = client.submit(query).all().result()
 
-        return [Team.vertex_to_instance(i) for i in results]
+        return [core.Team.vertex_to_instance(i) for i in results]
+
+    @classmethod
+    def get_team_owner(self, team_id):
+        """ Returns the Account instance that owns the given team """
+        query = f"g.V().hasLabel('{core.Team.LABEL}').has('id', '{team_id}')" + \
+            f".in('{AccountOwnsTeam.LABEL}')"
+
+        owner = client.submit(query).all().result()
+        return Account.vertex_to_instance(owner[0])
 
 
 class UserAssignedToCoreVertex(Edge):
@@ -95,39 +105,3 @@ class User(Vertex):
         user_accounts = [i["id"] for i in user_accounts]
 
         return user_accounts
-
-
-class Team(Vertex):
-    """ Represents a Team that is "created-by" a single account
-        (replaceable), and holds all of the permissions for all sub-nodes
-        (projects/topics etc.) against other users under this Team
-    """
-    LABEL = "team"
-    properties = {
-        "name": str
-    }
-
-    def get_owner(self):
-        """ Returns the Account instance that owns this Team;
-            indentified through the `AccountOwnsTeam` Edge
-        """
-        query = f"g.V().hasLabel('{self.LABEL}').has('id', '{self.id}')" + \
-            f".in('{AccountOwnsTeam.LABEL}')"
-
-        owner = client.submit(query).all().result()
-        return Account.vertex_to_instance(owner[0])
-
-
-class Project(Vertex):
-    """ Represents a Project instance that that can serve as a parent to
-        other Nodes (Project/Topics), and have it's own `UserAssignedToX`
-        incoming edge with Users
-    """
-    LABEL = "project"
-    properties = {
-        "title": str,
-        "description": str,
-        "status": int,
-        "date_created": str,
-        "due_date": str
-    }

@@ -134,7 +134,7 @@ class Edge(PropertyValidationMixin):
     def __init__(self, *args, outv_label=None, inv_label=None, **kwargs):
         """ Modifiess the inv label attribute for this instance
             The main purpose of this is to be able to use the same edge
-            methods along multiple kinds of "CoreVertices" (Team|Project|Topic)
+            methods along multiple kinds of "CoreVertices" (Team|CoreVertex)
         """
         self.OUTV_LABEL = outv_label or self.OUTV_LABEL
         self.INV_LABEL = inv_label or self.INV_LABEL

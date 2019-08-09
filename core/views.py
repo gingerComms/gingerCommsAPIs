@@ -57,21 +57,23 @@ class CoreVertexListCreateView(MethodView):
     """
     @jwt_required
     @permissions.has_core_vertex_parental_permissions
-    def get(self, vertex_type=None,
-            parent_id=None):
-        """ Returns all projects under the given parent's identifier """
+    def get(self, parent_id=None, vertex_type=None, vertex_id=None,
+            core_vertex=None):
+        """ Returns all direct coreVertices under the given parent's
+            identifier
+        """
         pass
 
     @jwt_required
     @permissions.has_core_vertex_parental_permissions
-    def post(self, parent_vertex=None, vertex_type=None,
-             parent_id=None):
+    def post(self, parent_id=None, vertex_type=None, vertex_id=None,
+             core_vertex=None):
         """ Creates the core vertex instance of the given type as well as
             and edge from the parent to the created vertex
         """
         pass
 
-core_app.add_url_rule("/<parent_id>/<vertex_type>/",
+core_app.add_url_rule("/<parent_id>/<vertex_type>/<vertex_id>",
                       view_func=CoreVertexListCreateView
                       .as_view("core_vertices"))
 
@@ -81,7 +83,7 @@ class CoreVertexRolesView(MethodView):
             Returns the role owned by the user (current | input) on GET,
             Adds new role on POST
         This view can be used for retrieving and creating new roles for
-        a core vertex of types Team | Project | Topic
+        a core vertex of types Team | CoreVertex
     """
     def handle_input_target_user(self, current_user_id):
         """ Handles conditional block for fetching the "input_user" or
@@ -178,6 +180,7 @@ class CoreVertexRolesView(MethodView):
             "role": edge.role
         }, 200)
 
+# <vertex_type> must be within team | coreVertex
 core_app.add_url_rule(
     "/<vertex_type>/<vertex_id>/roles",
     view_func=CoreVertexRolesView.as_view("core_vertex_roles"))

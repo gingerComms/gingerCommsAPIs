@@ -15,11 +15,23 @@ from flask import jsonify
 def has_core_vertex_parental_permissions(view):
     """ Returns the view if the authenticated user has access to the
         given `parent_node`'s in some form (through a parent/indirectly)
-        Also injects the parent_vertex instance into view through a named arg
+        Also injects the core_vertex instance into view through a named arg
     """
     @functools.wraps(view)
-    def wrapper(self, *args, **kwargs):
-        return view(*args, **kwargs)
+    def wrapper(self, *args, parent_id=None, vertex_id=None,
+                **kwargs):
+        """ Checks to confirm that the given vertex is under the given
+            parent's branch
+        """
+        core_vertex = CoreVertexOwnership.select_under_parent(
+            parent_id, vertex_id)
+
+        if not core_vertex:
+            return flask.abort(make_response(
+                jsonify({"error": "Unable to find the given vertex"}), 404))
+
+        return view(*args, parent_id=None, vertex_id=None,
+                    core_vertex=core_vertex, **kwargs)
 
     return wrapper
 
@@ -64,13 +76,14 @@ def any_core_vertex_role_required(view):
     """
     CORE_VERTEX_MAPS = {
         "team": Team,
-        "project": Project
+        "coreVertex": CoreVertex
     }
 
     @functools.wraps(view)
     def wrapper(*args, vertex_type=None, vertex_id=None, **kwargs):
         """ Checks the user roles through the vertex/edge methods """
         current_user = get_jwt_identity()
+        vertex_type = vertex_type if vertex_type == "team" else "coreVertex"
         vertex_model = CORE_VERTEX_MAPS[vertex_type]
 
         core_vertex = vertex_model.filter(id=vertex_id)

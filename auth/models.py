@@ -46,12 +46,13 @@ class AccountOwnsTeam(Edge):
 
 
 class UserAssignedToCoreVertex(Edge):
-    """ Represents a user -> team|project|topic connection from an Account's
-        User to a Team, Project or a Topic.
+    """ Represents a user -> team|coreVertex connection from an Account's
+        User to a Team or CoreVertex.
     """
     LABEL = "assigned_to"
     OUTV_LABEL = "user"
-    INV_LABEL = "team"  # This should be overridden during init
+    # This could be overridden during init (team | coreVertex)
+    INV_LABEL = "team"
     properties = {
         "role": str  # admin | lead | member
     }

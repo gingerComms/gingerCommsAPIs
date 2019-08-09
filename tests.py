@@ -171,16 +171,17 @@ class VpmoTestCase(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(len(json.loads(r.json)), 1)
 
-    def test_project_creation(self):
-        """ Tests the project creation endpoint used for creating projects
-            under other teams or projects
+    def test_core_vertex_creation(self):
+        """ Tests the CoreVertex creation endpoint used for creating
+            CoreVertices under Teams or other CoreVertices
         """
         return True
-        url = "/project/"
+        url = "/create_core_v/"
         user, token = logged_in["user"]["id"], logged_in["token"]
         team = Team.create(name="Test Team")
         edge = UserAssignedToCoreVertex.create(user=user, team=team.id,
                                          role="admin")
+        url += f"{team.id}/"
 
         pass
 

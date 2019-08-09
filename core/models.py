@@ -60,6 +60,7 @@ class Template(Vertex):
     """
     LABEL = "template"
     properties = {
+        "name": str,
         "fields": str,  # User defined JSON string sent in from the frontend
         "canHaveChildren": bool
     }
@@ -90,16 +91,12 @@ class CoreVertexOwnership(Edge):
 
     @classmethod
     def select_under_parent(cls, parent_id, queried_vertex_id):
-        """ Searches for the given vertex id under the given parent id
-            under the parent in the tree (children and subchildren included
-            in the search)
-            Mainly used for asserting that the queried vertex is a child of the
-            parent
+        """ Selects the given vertex id under the given parent's id
             TODO: Perhaps include permissions check as a part of this function
             later
         """
-        query = f"g.V().has('id', '{parent_id}')" + \
-            f".repeat(out('owns')).until(has('id', '{queried_vertex_id}'))"
+        query = f"g.V().has('id', '{queried_vertex_id}')" + \
+            f".where(in('owns').has('id', '{parent_id}'))"
         result = client.submit(query).all().result()
 
         if not result:

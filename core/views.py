@@ -52,28 +52,46 @@ core_app.add_url_rule("/account/<account_id>/teams",
 
 
 class CoreVertexListCreateView(MethodView):
-    """ Contains the GET and POST views required for Listing and Creating
-        CoreVertex instances (excluding Teams since teams don't have parents)
+    """ Contains the GET and POST views required for listing and creating
+        children CoreVertices in a given Team or CoreVertex
     """
     @jwt_required
-    @permissions.has_core_vertex_parental_permissions
-    def get(self, parent_id=None, vertex_type=None, vertex_id=None,
-            core_vertex=None):
+    @permissions.has_core_vertex_permissions
+    def get(self, vertex_type=None, vertex_id=None):
         """ Returns all direct coreVertices under the given parent's
             identifier
         """
         pass
 
     @jwt_required
-    @permissions.has_core_vertex_parental_permissions
-    def post(self, parent_id=None, vertex_type=None, vertex_id=None,
-             core_vertex=None):
+    @permissions.has_core_vertex_permissions
+    def post(self, vertex_type=None, vertex_id=None):
         """ Creates the core vertex instance of the given type as well as
             and edge from the parent to the created vertex
         """
-        pass
+        data = json.loads(request.data)
 
-core_app.add_url_rule("/<parent_id>/<vertex_type>/<vertex_id>",
+        # Confirming that the required template exists on the ROOT of the vertex
+        # tree
+        if vertex_type == "team":
+            # If this node is the team (root), we can just check if it has an
+            # outgoing edge to this template
+            query = f"g.V().has({Team.LABEL}, 'id', {vertex_id})" + \
+                f".out('{TeamOwnsTemplate.LABEL}')" + \
+                f".has('id', '{data['template']}')"
+            template = client.submit(query).all().result()
+            if not template:
+                return jsonify_response(
+                    {"error": "Template doesn't exist"}, 404)
+            template = Template.vertex_to_instance(template[0])
+        else:
+            # Otherwise, we have to find the Team (Root) for this CoreVertex,
+            # and then check if that team has the template
+            # TODO: Just use repeat(in('owns'))
+            # .until(has('team', 'id', '<team_id>'))
+            pass
+
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/children/",
                       view_func=CoreVertexListCreateView
                       .as_view("core_vertices"))
 

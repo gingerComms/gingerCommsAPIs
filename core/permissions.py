@@ -12,26 +12,15 @@ from auth.models import *
 from flask import jsonify
 
 
-def has_core_vertex_parental_permissions(view):
-    """ Returns the view if the authenticated user has access to the
-        given `parent_node`'s in some form (through a parent/indirectly)
-        Also injects the core_vertex instance into view through a named arg
+def has_core_vertex_permissions(view, required_permissions=[]):
+    """ Returns the view if the authenticated user has the required
+        permissions for the requested core-vertex (directly/through a parent)
+
+        NOTE: This is UNIMPLEMENTED. TODO AFTER TEMPLATES
     """
     @functools.wraps(view)
-    def wrapper(self, *args, parent_id=None, vertex_id=None,
-                **kwargs):
-        """ Checks to confirm that the given vertex is under the given
-            parent's branch
-        """
-        core_vertex = CoreVertexOwnership.select_under_parent(
-            parent_id, vertex_id)
-
-        if not core_vertex:
-            return flask.abort(make_response(
-                jsonify({"error": "Unable to find the given vertex"}), 404))
-
-        return view(*args, parent_id=None, vertex_id=None,
-                    core_vertex=core_vertex, **kwargs)
+    def wrapper(*args, **kwargs):
+        return view(*args, **kwargs)
 
     return wrapper
 

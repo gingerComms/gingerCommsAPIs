@@ -175,15 +175,28 @@ class VpmoTestCase(TestCase):
         """ Tests the CoreVertex creation endpoint used for creating
             CoreVertices under Teams or other CoreVertices
         """
-        return True
-        url = "/create_core_v/"
+        logged_in = self.test_user_login()
         user, token = logged_in["user"]["id"], logged_in["token"]
         team = Team.create(name="Test Team")
-        edge = UserAssignedToCoreVertex.create(user=user, team=team.id,
-                                         role="admin")
-        url += f"{team.id}/"
+        user_team_edge = UserAssignedToCoreVertex.create(user=user,
+                                                         team=team.id,
+                                                         role="admin")
+        # Adding a template undewr the User to create the new CoreVertex off of
+        template = Template.create(name="Project")
+        team_template_edge = TeamOwnsTemplate.create(team=team.id,
+                                                     template=template.id)
+        url = f"/team/{team.id}/children/"
 
-        pass
+        data = {
+            "title": "The Test Project",
+            "template": template.id
+        }
+        r = self.client.post(
+            url,
+            json=data,
+            headers={"Authorization": "Bearer %s" % token})
+        self.assertEqual(r.status_code, 201, r.status_code)
+        self.assertEqual(r.json["title"], "The Test Project", r.json)
 
 
 if __name__ == "__main__":

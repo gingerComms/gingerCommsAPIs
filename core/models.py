@@ -46,7 +46,7 @@ class CoreVertex(Vertex):
 
 class TemplateProperty(Vertex):
     """ Represents an input "field" added by a user in a template """
-    LABEL = "property"
+    LABEL = "templateProperty"
     fields = {
         "name": str,
         "fieldType": str
@@ -63,6 +63,16 @@ class Template(Vertex):
         "fields": str,  # User defined JSON string sent in from the frontend
         "canHaveChildren": bool
     }
+
+
+class TemplateHasProperty(Edge):
+    """ Represents an outward edge from a Template to a TemplateProperty,
+        identifying that a Template has a particular Property
+    """
+    LABEL = "hasProperty"
+    OUTV_LABEL = "template"
+    INV_LABEL = "templateProperty"
+    properties = {}
 
 
 class CoreVertexOwnership(Edge):

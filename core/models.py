@@ -12,6 +12,43 @@ class TeamOwnsTemplate(Edge):
     INV_LABEL = "template"
     properties = {}
 
+    @classmethod
+    def all_team_templates(cls, team_id):
+        """ Return all templates under the given team """
+        query = f"g.V().has('{Team.LABEL}', 'id', '{team_id}')" + \
+            f".out('{cls.LABEL}')"
+        results = client.submit(query).all().result()
+
+        return [Template.vertex_to_instance(i) for i in results]
+
+    @classmethod
+    def get_template(cls, vertex_type, vertex_id, template_id):
+        """ Returns the template owned by the given:
+                "Team" if the vertex_type is a `team`, or
+                "CoreVertex's Root Level Team" if the vertex_type is a
+                    `coreVertex`
+        """
+        base_template_query = f".out('{TeamOwnsTemplate.LABEL}')" + \
+            f".has('id', '{template_id}')"
+
+        if vertex_type == "team":
+            # If this node is the team (root), we can just check if it has an
+            # outgoing edge to this template
+            query = f"g.V().has('{Team.LABEL}', 'id', '{vertex_id}')" + \
+                base_template_query
+        else:
+            # Otherwise, we have to find the Team (Root) for this CoreVertex,
+            # and then check if that team has the template
+            query = f"g.V().has('{CoreVertex.LABEL}', 'id', '{vertex_id}')" + \
+                f".repeat(__.in('{CoreVertexOwnership.LABEL}'))" + \
+                f".until(__.hasLabel('{Team.LABEL}'))" + \
+                base_template_query
+
+        template = client.submit(query).all().result()
+        if not template:
+            return None
+        return Template.vertex_to_instance(template[0])
+
 
 class CoreVertexInheritsFromTemplate(Edge):
     """ Represents a "inheritsFrom" Relationship between a CoreVertex
@@ -40,7 +77,8 @@ class CoreVertex(Vertex):
     """
     LABEL = "coreVertex"
     properties = {
-        "title": str
+        "title": str,
+        "templateData": str
     }
 
 
@@ -61,7 +99,6 @@ class Template(Vertex):
     LABEL = "template"
     properties = {
         "name": str,
-        "fields": str,  # User defined JSON string sent in from the frontend
         "canHaveChildren": bool
     }
 
@@ -83,23 +120,18 @@ class CoreVertexOwnership(Edge):
         True
     """
     LABEL = "owns"
-    # Both of these can be overridden during init (team | coreVertex)
-    OUTV_LABEL = "coreVertex"
+    # This can be overridden during init (team | coreVertex)
+    OUTV_LABEL = "team"
     INV_LABEL = "coreVertex"
     properties = {}
 
-
     @classmethod
-    def select_under_parent(cls, parent_id, queried_vertex_id):
-        """ Selects the given vertex id under the given parent's id
-            TODO: Perhaps include permissions check as a part of this function
-            later
+    def get_children(cls, parent_id, parent_type):
+        """ Returns all DIRECT children coreVertices under the given
+            parent
         """
-        query = f"g.V().has('id', '{queried_vertex_id}')" + \
-            f".where(in('owns').has('id', '{parent_id}'))"
+        query = f"g.V().has('{parent_type}', 'id', '{parent_id}')" + \
+            f".out('{cls.LABEL}').hasLabel('{CoreVertex.LABEL}')"
         result = client.submit(query).all().result()
 
-        if not result:
-            raise None
-
-        return CoreVertex.vertex_to_instance(result[0])
+        return [CoreVertex.vertex_to_instance(i) for i in result]

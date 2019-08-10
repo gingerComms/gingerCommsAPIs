@@ -57,45 +57,67 @@ class CoreVertexListCreateView(MethodView):
     """
     @jwt_required
     @permissions.has_core_vertex_permissions
-    def get(self, vertex_type=None, vertex_id=None):
+    def get(self, vertex=None, vertex_type=None, vertex_id=None):
         """ Returns all direct coreVertices under the given parent's
             identifier
         """
-        pass
+        if not vertex:
+            return jsonify_response({"error": "Vertex not found"}, 404) 
+
+        children = CoreVertexOwnership.get_children(vertex_id, vertex_type)
+
+        schema = CoreVertexListSchema(many=True)
+        response = json.loads(schema.dumps(children).data)
+
+        return jsonify_response(response, 200)
 
     @jwt_required
     @permissions.has_core_vertex_permissions
-    def post(self, vertex_type=None, vertex_id=None):
+    def post(self, vertex=None, vertex_type=None, vertex_id=None):
         """ Creates the core vertex instance of the given type as well as
             and edge from the parent to the created vertex
         """
+        if not vertex:
+            return jsonify_response({"error": "Vertex not found"}, 404)
+
         data = json.loads(request.data)
+
+        # Confirming the request data schema
+        if "title" not in data or "template" not in data:
+            return jsonify_response({"error": "Incorrect Schema"}, 400)
 
         # Confirming that the required template exists on the ROOT of the vertex
         # tree
-        if vertex_type == "team":
-            # If this node is the team (root), we can just check if it has an
-            # outgoing edge to this template
-            query = f"g.V().has({Team.LABEL}, 'id', {vertex_id})" + \
-                f".out('{TeamOwnsTemplate.LABEL}')" + \
-                f".has('id', '{data['template']}')"
-            template = client.submit(query).all().result()
-            if not template:
-                return jsonify_response(
-                    {"error": "Template doesn't exist"}, 404)
-            template = Template.vertex_to_instance(template[0])
-        else:
-            # Otherwise, we have to find the Team (Root) for this CoreVertex,
-            # and then check if that team has the template
-            # TODO: Just use repeat(in('owns'))
-            # .until(has('team', 'id', '<team_id>'))
-            pass
+        template = TeamOwnsTemplate.get_template(
+            vertex_type, vertex.id, data["template"])
+        if not template:
+            return jsonify_response(
+                {"error": "Template doesn't exist"}, 404)
+
+        core_vertex = CoreVertex.create(title=data["title"])
+        template_edge = CoreVertexInheritsFromTemplate.create(
+            coreVertex=core_vertex.id, template=template.id)
+        child_edge = CoreVertexOwnership(
+            outv_label=vertex_type, inv_label="coreVertex").create(
+            outv_id=vertex_id, inv_id=core_vertex.id)
+
+        response = {
+            "id": core_vertex.id,
+            "title": core_vertex.title,
+            "template": {
+                "id": template.id,
+                "name": template.name,
+                "canHaveChildren": template.canHaveChildren
+            }
+        }
+        return jsonify_response(response, 201)
 
 core_app.add_url_rule("/<vertex_type>/<vertex_id>/children/",
                       view_func=CoreVertexListCreateView
-                      .as_view("core_vertices"))
+                      .as_view("list_create_core_vertices"))
 
 
+# [TODO]
 class CoreVertexRolesView(MethodView):
     """ Container for all the core vertices' roles endpoint;
             Returns the role owned by the user (current | input) on GET,
@@ -202,3 +224,50 @@ class CoreVertexRolesView(MethodView):
 core_app.add_url_rule(
     "/<vertex_type>/<vertex_id>/roles",
     view_func=CoreVertexRolesView.as_view("core_vertex_roles"))
+
+
+class ListCreateTemplatesView(MethodView):
+    """ Container for the LIST and CREATE endpoints for a given Team
+        NOTE: The endpoints have a `vertex_type` parameter only to be able
+            to reuse the same `has_core_vertex_permissions` permission
+    """
+
+    @jwt_required
+    @permissions.has_core_vertex_permissions
+    def get(self, vertex=None, vertex_type="team", vertex_id=None):
+        """ LIST Endpoint for a team's templates """
+        if not vertex:
+            return jsonify_response({"error": "Vertex not found"}, 404)
+
+        templates = TeamOwnsTemplate.all_team_templates(vertex.id)
+
+        schema = TemplateSchema(many=True)
+        response = json.loads(schema.dumps(templates).data)
+
+        return jsonify_response(response, 200)
+
+    @jwt_required
+    @permissions.has_core_vertex_permissions
+    def post(self, vertex=None, vertex_type="team", vertex_id=None):
+        """ CREATE Endpoint for a team's templates """
+        if not vertex:
+            return jsonify_response({"error": "Vertex not found"}, 404)
+
+        data = json.loads(request.data)
+
+        if "name" not in data or "canHaveChildren" not in data:
+            return jsonify_response({"error": "Invalid schema"}, 400)
+
+        template = Template.create(name=data["name"],
+                                   canHaveChildren=data["canHaveChildren"])
+        owns_edge = TeamOwnsTemplate.create(team=vertex.id,
+                                            template=template.id)
+
+        schema = TemplateSchema()
+        response = json.loads(schema.dumps(template).data)
+
+        return jsonify_response(response, 201)
+
+core_app.add_url_rule("/team/<vertex_id>/templates/",
+                      view_func=ListCreateTemplatesView
+                      .as_view("list_create_templates"))

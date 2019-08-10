@@ -15,12 +15,28 @@ from flask import jsonify
 def has_core_vertex_permissions(view, required_permissions=[]):
     """ Returns the view if the authenticated user has the required
         permissions for the requested core-vertex (directly/through a parent)
-
+            - Also injects the `vertex` instance identified by the id
+            into the view
         NOTE: This is UNIMPLEMENTED. TODO AFTER TEMPLATES
     """
+    # `vertex_type` to cls map
+    classes = {
+        "team": Team,
+        "coreVertex": CoreVertex
+    }
+
     @functools.wraps(view)
-    def wrapper(*args, **kwargs):
-        return view(*args, **kwargs)
+    def wrapper(*args, vertex_type="team", vertex_id=None, **kwargs):
+        """ Uses the provided instance methods to confirm that the user
+            has access to the node
+        """
+        vertex = classes[vertex_type].filter(id=vertex_id)
+        vertex = vertex[0] if vertex else None
+
+        # Do permission check there #
+
+        return view(*args, vertex=vertex, vertex_type=vertex_type,
+                    vertex_id=vertex_id, **kwargs)
 
     return wrapper
 

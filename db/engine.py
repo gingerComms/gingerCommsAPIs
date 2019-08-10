@@ -20,6 +20,8 @@ class PropertyValidationMixin:
     def validate_input(cls, data):
         """ Validates the provided data against the `properties` property
             on this Vertex/Edge using basic type checking.
+
+            NOTE: This currently ddoesn't check for REQUIRED PROPERTIES [TODO]
         """
         errors = []
         messages = {
@@ -154,11 +156,13 @@ class Edge(PropertyValidationMixin):
         return instance
 
     @classmethod
-    def create(cls, **data):
+    def create(cls, outv_id=None, inv_id=None, **data):
         """ Receives the out/in vertice ids and creates an edge with the given
             properties between the two vertices
         """
-        out_v, in_v = data.pop(cls.OUTV_LABEL), data.pop(cls.INV_LABEL)
+        # To allow support of the same label relationships
+        out_v = outv_id or data.pop(cls.OUTV_LABEL)
+        in_v = inv_id or data.pop(cls.INV_LABEL)
 
         assert isinstance(out_v, str)
         assert isinstance(in_v, str)

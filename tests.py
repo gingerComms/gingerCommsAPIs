@@ -69,7 +69,7 @@ class VpmoTestCase(TestCase):
             json={"title": "Test Account."},
             headers={"Authorization": "Bearer %s" % token}
         )
-        self.assertEqual(r.status_code, 201)
+        self.assertEqual(r.status_code, 201, r.json)
 
     def test_team_role_retrieve(self):
         """ Tests the Team Role retrieval endpoint """
@@ -134,9 +134,6 @@ class VpmoTestCase(TestCase):
             headers={"Authorization": "Bearer %s" % token}
         )
         self.assertEqual(r.status_code, 403, r.json)
-        self.assertEqual(r.json["error"],
-                         "User lacks the required role for the role requested.",
-                         r.json)
 
     def test_teams_list_create_view(self):
         """ Tests the team creation and listing endpoint """
@@ -182,7 +179,7 @@ class VpmoTestCase(TestCase):
                                                          team=team.id,
                                                          role="admin")
         # Adding a template undewr the User to create the new CoreVertex off of
-        template = Template.create(name="Project")
+        template = Template.create(name="Project", canHaveChildren=True)
         team_template_edge = TeamOwnsTemplate.create(team=team.id,
                                                      template=template.id)
         url = f"/team/{team.id}/children/"
@@ -194,10 +191,88 @@ class VpmoTestCase(TestCase):
         r = self.client.post(
             url,
             json=data,
-            headers={"Authorization": "Bearer %s" % token})
+            headers={"Authorization": "Bearer %s" % token}
+        )
         self.assertEqual(r.status_code, 201, r.status_code)
         self.assertEqual(r.json["title"], "The Test Project", r.json)
 
+        created_node = r.json["id"]
+        url = f"coreVertex/{created_node}/children/"
+        data = {
+            "title": "The Test Project 2",
+            "template": template.id
+        }
+        r = self.client.post(
+            url,
+            json=data,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 201, r.status_code)
+        self.assertEqual(r.json["title"], "The Test Project 2", r.json)
+
+        return team.id, created_node
+
+    def test_core_vertex_list(self):
+        """ Tests the LIST endpoint that lists all coreVertices under the given
+            team/coreVertex
+        """
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        created_team, created_node = self.test_core_vertex_creation()
+
+        url = f"/team/{created_team}/children/"
+        r = self.client.get(
+            url,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 200, r.status_code)
+        self.assertEqual(len(r.json), 1, r.json)
+
+        url = f"/coreVertex/{created_node}/children/"
+        r = self.client.get(
+            url,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 200, r.status_code)
+        self.assertEqual(len(r.json), 1)
+
+    def test_templates_creation_view(self):
+        """ Tests the create endpoint for creating new templates owned by
+            a team
+        """
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        team = Team.create(name="Test Team")
+        user_team_edge = UserAssignedToCoreVertex.create(user=user,
+                                                         team=team.id,
+                                                         role="admin")
+
+        data = {"name": "Template Test", "canHaveChildren": True}
+        url = f"/team/{team.id}/templates/"
+        r = self.client.post(
+            url,
+            json=data,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 201, r.json)
+        self.assertEqual(r.json["name"], "Template Test", r.json)
+
+        return team.id, r.json["id"]
+
+    def test_templates_list_view(self):
+        """ Tests the LIST view for listing all templates under a team """
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        created_team, created_template = self.test_templates_creation_view()
+
+        url = f"/team/{created_team}/templates/"
+        r = self.client.get(
+            url,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.json), 1, r.json)
+        self.assertEqual(r.json[0]["id"], created_template, r.json)
 
 if __name__ == "__main__":
     unittest.main()

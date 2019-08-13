@@ -10,35 +10,44 @@ import functools
 from core.models import *
 from auth.models import *
 from flask import jsonify
+import inspect
 
 
-def has_core_vertex_permissions(view, required_permissions=[]):
-    """ Returns the view if the authenticated user has the required
-        permissions for the requested core-vertex (directly/through a parent)
-            - Also injects the `vertex` instance identified by the id
-            into the view
-        NOTE: This is UNIMPLEMENTED. TODO AFTER TEMPLATES
-    """
-    # `vertex_type` to cls map
-    classes = {
-        "team": Team,
-        "coreVertex": CoreVertex
-    }
-
-    @functools.wraps(view)
-    def wrapper(*args, vertex_type="team", vertex_id=None, **kwargs):
-        """ Uses the provided instance methods to confirm that the user
-            has access to the node
+def core_vertex_permission_decorator_factory(overwrite_vertex_type=None,
+                                             required_permissions=[]):
+    def has_core_vertex_permissions(view):
+        """ Returns the view if the authenticated user has the required
+            permissions for the requested core-vertex (directly/through a
+            parent)
+                - Also injects the `vertex` instance identified by the id
+                into the view
+            NOTE: This is UNIMPLEMENTED. TODO AFTER TEMPLATES
         """
-        vertex = classes[vertex_type].filter(id=vertex_id)
-        vertex = vertex[0] if vertex else None
+        # `vertex_type` to cls map
+        classes = {
+            "team": Team,
+            "coreVertex": CoreVertex
+        }
 
-        # Do permission check there #
+        @functools.wraps(view)
+        def wrapper(*args, vertex_type=None, vertex_id=None, **kwargs):
+            """ Uses the provided instance methods to confirm that the user
+                has access to the node
+            """
+            if overwrite_vertex_type is not None:
+                vertex_type = overwrite_vertex_type
 
-        return view(*args, vertex=vertex, vertex_type=vertex_type,
-                    vertex_id=vertex_id, **kwargs)
+            vertex = classes[vertex_type].filter(id=vertex_id)
+            vertex = vertex[0] if vertex else None
 
-    return wrapper
+            # Do permission check here #
+
+            return view(*args, vertex=vertex, vertex_type=vertex_type,
+                        vertex_id=vertex_id, **kwargs)
+
+        return wrapper
+
+    return has_core_vertex_permissions
 
 
 def account_held_by_user(view):

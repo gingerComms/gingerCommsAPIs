@@ -1,4 +1,5 @@
 from db.engine import Vertex, Edge, client
+from settings import DATABASE_SETTINGS
 
 
 class TeamOwnsTemplate(Edge):
@@ -85,7 +86,7 @@ class CoreVertex(Vertex):
 class TemplateProperty(Vertex):
     """ Represents an input "field" added by a user in a template """
     LABEL = "templateProperty"
-    fields = {
+    properties = {
         "name": str,
         "fieldType": str
     }
@@ -102,15 +103,89 @@ class Template(Vertex):
         "canHaveChildren": bool
     }
 
+    @classmethod
+    def update(cls, validated_data={}, vertex_id=None):
+        """ Updates the template through the base `update` method, as well
+            as added functionality for adding (DROPPING + RECREATING) the
+            properties
+        """
+        template_properties = validated_data.pop("properties", [])
+
+        template = super().update(validated_data=validated_data, vertex_id=vertex_id)
+
+        # Dropping all template properties and recreating them
+        if template_properties:
+            drop_query = f"g.V().has('{cls.LABEL}', 'id', '{vertex_id}')" + \
+                f".out('{TemplateHasProperty.LABEL}').drop()"
+            client.submit(drop_query)
+
+            # Recreating the provided template_properties
+            create_query = "g.V()" + \
+                f".has('{Template.LABEL}', 'id', '{template.id}').as('t')"
+            for prop in template_properties:
+                # Vertex Create + partition key query
+                create_query += f".addV('{TemplateProperty.LABEL}')" + \
+                    f".property('{DATABASE_SETTINGS['partition_key']}', " + \
+                    f"'{TemplateProperty.LABEL}')"
+                # A property call for each field
+                for field, field_type in TemplateProperty.properties.items():
+                    create_query += f".property('{field}', '{prop[field]}')"
+                # The edge linking the template to the property
+                create_query += f".addE('{TemplateHasProperty.LABEL}')" + \
+                    ".from('t')"
+            # Selecting all created properties at the end of the query
+            create_query += f".outV().out('{TemplateHasProperty.LABEL}')"
+
+            res = client.submit(create_query).all().result()
+            template.properties = [
+                TemplateProperty.vertex_to_instance(i) for i in res]
+
+        return template
+
 
 class TemplateHasProperty(Edge):
     """ Represents an outward edge from a Template to a TemplateProperty,
         identifying that a Template has a particular Property
     """
     LABEL = "hasProperty"
-    OUTV_LABEL = "template"
-    INV_LABEL = "templateProperty"
+    OUTV_LABEL = Template.LABEL
+    INV_LABEL = TemplateProperty.LABEL
     properties = {}
+
+    @classmethod
+    def get_template_properties(cls, template_id):
+        """ Returns all TemplateProperties belonging to the given template """
+        query = f"g.V().has('{Template.LABEL}', 'id', '{template_id}')" + \
+            f".out('{cls.LABEL}')"
+
+        res = client.submit(query).all().result()
+
+        return [TemplateProperty.vertex_to_instance(i) for i in res]
+
+    @classmethod
+    def get_template_with_properties(cls, template_id, parent_team_id=None):
+        """ Returns the template and the template properties belonging to it
+            in a single query
+        """
+        query_suffix = f".has('{Template.LABEL}', 'id', '{template_id}')" + \
+            f".as('template').out('{cls.LABEL}').as('property')" + \
+            f".select('template', 'property')"
+
+        query = f"g.V()"
+        if parent_team_id is not None:
+            query += f".has('{Team.LABEL}', 'id', '{parent_team_id}')" + \
+                f".out('{TeamOwnsTemplate.LABEL}')"
+
+        res = client.submit(query+query_suffix).all().result()
+
+        if not res:
+            return None
+
+        template = Template.vertex_to_instance(res[0]["template"])
+        template.properties = [
+            TemplateProperty.vertex_to_instance(i["property"]) for i in res]
+
+        return template
 
 
 class CoreVertexOwnership(Edge):
@@ -122,7 +197,7 @@ class CoreVertexOwnership(Edge):
     LABEL = "owns"
     # This can be overridden during init (team | coreVertex)
     OUTV_LABEL = "team"
-    INV_LABEL = "coreVertex"
+    INV_LABEL = CoreVertex.LABEL
     properties = {}
 
     @classmethod

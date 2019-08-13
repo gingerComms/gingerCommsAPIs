@@ -2,7 +2,7 @@ from flask import Blueprint, request
 import json
 from .models import *
 from .serializers import *
-from utils import *
+from utils.general_utils import *
 from flask_jwt_extended import (
     jwt_required, get_jwt_identity,
     create_access_token

@@ -7,6 +7,7 @@ from db.engine import client
 import copy
 import json
 import time
+from core.serializers import *
 
 
 class VpmoTestCase(TestCase):
@@ -270,9 +271,128 @@ class VpmoTestCase(TestCase):
             url,
             headers={"Authorization": "Bearer %s" % token}
         )
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 200, r.json)
         self.assertEqual(len(r.json), 1, r.json)
         self.assertEqual(r.json[0]["id"], created_template, r.json)
+
+    def test_core_vertex_update_view(self):
+        """ Tests the PATCH/PUT endpoint for updating a coreVertex """
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        created_team, created_node = self.test_core_vertex_creation()
+
+        # PUT (full update) test for the coreVertex
+        url = f"/coreVertex/{created_node}/"
+        data = {
+            "title": "New Name",
+            "templateData": "{}"
+        }
+        r = self.client.put(
+            url,
+            json=data,
+            headers={
+                "Authorization": "Bearer %s" % token,
+                "Content-Type": "application/json"
+            }
+        )
+        self.assertEqual(r.status_code, 200, r.json)
+        self.assertEqual(r.json["title"], "New Name")
+        self.assertEqual(r.json["templateData"], "{}")
+
+        # PATCH (partial update) test for the coreVertex
+        new_template_data = "{\"name\": \"Good Project\"}"
+        data = {
+            "templateData": new_template_data
+        }
+        r = self.client.patch(
+            url,
+            json=data,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 200, r.json     )
+        self.assertEqual(r.json["title"], "New Name")
+        self.assertEqual(data["templateData"], new_template_data)
+
+    def test_core_vertex_retrieve_view(self):
+        """ Tests the retrieve endpoint for CoreVertices """
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        created_team, created_node = self.test_core_vertex_creation()
+
+        url = f"/coreVertex/{created_node}/"
+        r = self.client.get(
+            url,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 200, r.json)
+        self.assertEqual(r.json["id"], created_node)
+
+    def test_templates_retrieve_view(self):
+        """ Tests the update template view for a Template in a given Team """
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        created_team, created_template = self.test_templates_creation_view()
+
+        # Adding properties to the template
+        template_property = TemplateProperty.create(
+            name="Name", fieldType="String")
+        property_edge = TemplateHasProperty.create(
+            template=created_template, templateProperty=template_property.id)
+
+        url = f"/team/{created_team}/templates/{created_template}/"
+        r = self.client.get(
+            url,
+            headers={"Authorization": "Bearer %s" % token}
+        )
+
+        self.assertEqual(r.status_code, 200, r.json)
+        self.assertEqual(r.json["id"], created_template, r.json)
+        self.assertEqual(len(r.json.get("properties", [])), 1, r.json)
+
+        return created_team, created_template, template_property.id
+
+    def test_templates_update_view(self):
+        """ Tests the full and partial update template views """
+        logged_in = self.test_user_login()
+        user, token = logged_in["user"]["id"], logged_in["token"]
+        team, template, template_property = self.test_templates_retrieve_view()
+
+        url = f"/team/{team}/templates/{template}/"
+
+        # Full Update (PUT) Test
+        r = self.client.put(
+            url,
+            json={
+                "name": "New Template Name",
+                "canHaveChildren": False,
+                "properties": [
+                    {
+                        "name": "String Field Name",
+                        "fieldType": "String"
+                    },
+                    {
+                        "name": "String Field 2 Name",
+                        "fieldType": "String"
+                    }
+                ]
+            },
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 200, r.json)
+        self.assertEqual(r.json["name"], "New Template Name", r.json)
+
+        # Partial Update (PATCH) Test
+        r = self.client.patch(
+            url,
+            json={
+                "name": "Template Name 2"
+            },
+            headers={"Authorization": "Bearer %s" % token}
+        )
+        self.assertEqual(r.status_code, 200, r.json)
+        self.assertEqual(r.json["name"], "Template Name 2", r.json)
+        self.assertEqual(len(r.json["properties"]), 2, r.json)
+
 
 if __name__ == "__main__":
     unittest.main()

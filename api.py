@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
+from flask_caching import Cache
 from settings import *
 
 
@@ -15,7 +16,7 @@ app.register_blueprint(auth_app, url_prefix="/auth")
 app.register_blueprint(core_app)
 
 jwt = JWTManager(app)
-
+# cache = Cache(app)
 bcrypt = Bcrypt(app)
 
 

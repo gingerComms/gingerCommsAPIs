@@ -4,17 +4,20 @@ import auth
 from .models import *
 from .serializers import *
 from . import permissions
+from utils.metaclasses import *
+from utils.generic_views import RetrieveUpdateAPIView
 from flask_jwt_extended import (
     jwt_required, get_jwt_identity
 )
-from utils import *
+from utils.general_utils import *
 import json
+from flask_caching import Cache
 
 
 core_app = Blueprint("core", __name__)
 
 
-class TeamsListCreateView(MethodView):
+class ListCreateTeamsView(MethodView):
     """ Contains all of the Basic GET/POST methods for Listing (GET) and
         Creating (POST) teams
     """
@@ -48,15 +51,15 @@ class TeamsListCreateView(MethodView):
         return jsonify_response(schema.dumps(team).data, 201)
 
 core_app.add_url_rule("/account/<account_id>/teams",
-                      view_func=TeamsListCreateView.as_view("teams"))
+                      view_func=ListCreateTeamsView.as_view("teams"))
 
 
-class CoreVertexListCreateView(MethodView):
+class ListCreateCoreVertexView(MethodView):
     """ Contains the GET and POST views required for listing and creating
         children CoreVertices in a given Team or CoreVertex
     """
     @jwt_required
-    @permissions.has_core_vertex_permissions
+    @permissions.core_vertex_permission_decorator_factory()
     def get(self, vertex=None, vertex_type=None, vertex_id=None):
         """ Returns all direct coreVertices under the given parent's
             identifier
@@ -72,7 +75,7 @@ class CoreVertexListCreateView(MethodView):
         return jsonify_response(response, 200)
 
     @jwt_required
-    @permissions.has_core_vertex_permissions
+    @permissions.core_vertex_permission_decorator_factory()
     def post(self, vertex=None, vertex_type=None, vertex_id=None):
         """ Creates the core vertex instance of the given type as well as
             and edge from the parent to the created vertex
@@ -94,7 +97,7 @@ class CoreVertexListCreateView(MethodView):
             return jsonify_response(
                 {"error": "Template doesn't exist"}, 404)
 
-        core_vertex = CoreVertex.create(title=data["title"])
+        core_vertex = CoreVertex.create(title=data["title"], templateData="{}")
         template_edge = CoreVertexInheritsFromTemplate.create(
             coreVertex=core_vertex.id, template=template.id)
         child_edge = CoreVertexOwnership(
@@ -104,6 +107,7 @@ class CoreVertexListCreateView(MethodView):
         response = {
             "id": core_vertex.id,
             "title": core_vertex.title,
+            "templateData": core_vertex.templateData,
             "template": {
                 "id": template.id,
                 "name": template.name,
@@ -113,8 +117,145 @@ class CoreVertexListCreateView(MethodView):
         return jsonify_response(response, 201)
 
 core_app.add_url_rule("/<vertex_type>/<vertex_id>/children/",
-                      view_func=CoreVertexListCreateView
+                      view_func=ListCreateCoreVertexView
                       .as_view("list_create_core_vertices"))
+
+
+class RetrieveUpdateCoreVertexView(RetrieveUpdateAPIView):
+    """ Container for the DETAIL and UPDATE (full/partial) endpoints
+        for CoreVertices;
+    """
+    serializer_class = CoreVertexDetailSchema
+    vertex_class = CoreVertex
+
+    def get_vertex_id(self):
+        """ Returns the vertex-id from the parsed url; used in the
+            Update mixin
+        """
+        return request.view_args["vertex_id"]
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="coreVertex")
+    def get(self, vertex=None, vertex_id=None, **kwargs):
+        """ Returns the object identified by the given vertex id
+            - Overridden to add the decorators, and reuse the Vertex
+                instance injected through the permission
+        """
+        self.get_object = lambda: vertex
+        return super().get()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="coreVertex")
+    def put(self, vertex=None, vertex_id=None, **kwargs):
+        """ Full Update endpoint for coreVertices """
+        return self.update()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="coreVertex")
+    def patch(self, vertex=None, vertex_id=None, **kwargs):
+        """ Full Update endpoint for coreVertices """
+        return self.update(partial=True)
+
+core_app.add_url_rule("/coreVertex/<vertex_id>/",
+                      view_func=RetrieveUpdateCoreVertexView
+                      .as_view("retrieve_update_core_vertices"))
+
+
+class ListCreateTemplatesView(MethodView):
+    """ Container for the LIST and CREATE endpoints for a given Team """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team")
+    def get(self, vertex=None, vertex_type="team", vertex_id=None):
+        """ LIST Endpoint for a team's templates """
+        if not vertex:
+            return jsonify_response({"error": "Vertex not found"}, 404)
+
+        templates = TeamOwnsTemplate.all_team_templates(vertex.id)
+
+        schema = TemplateSchema(many=True)
+        response = json.loads(schema.dumps(templates).data)
+
+        return jsonify_response(response, 200)
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team")
+    def post(self, vertex=None, vertex_type="team", vertex_id=None):
+        """ CREATE Endpoint for a team's templates """
+        if not vertex:
+            return jsonify_response({"error": "Vertex not found"}, 404)
+
+        data = json.loads(request.data)
+
+        # Basic validation for the input
+        if "name" not in data or "canHaveChildren" not in data:
+            return jsonify_response({"error": "Invalid schema"}, 400)
+
+        template = Template.create(name=data["name"],
+                                   canHaveChildren=data["canHaveChildren"])
+        owns_edge = TeamOwnsTemplate.create(team=vertex.id,
+                                            template=template.id)
+
+        schema = TemplateSchema()
+        response = json.loads(schema.dumps(template).data)
+
+        return jsonify_response(response, 201)
+
+core_app.add_url_rule("/team/<vertex_id>/templates/",
+                      view_func=ListCreateTemplatesView
+                      .as_view("list_create_templates"))
+
+
+class RetrieveUpdateTemplatesView(RetrieveUpdateAPIView):
+    """ Container for the DETAIL and UPDATE (full/partial) endpoints
+        for Templates
+    """
+    serializer_class = TemplateSchema
+    vertex_class = Template
+
+    def get_object(self):
+        """ Uses the vertex_attribute added to the View to get the
+            template
+        """
+        template = TemplateHasProperty.get_template_with_properties(
+            request.view_args["template_id"], request.view_args["vertex_id"])
+
+        return template
+
+    def get_vertex_id(self):
+        """ Returns the template-id from the parsed url; used in the
+            Update mixin
+        """
+        return request.view_args["template_id"]
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team")
+    def get(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Returns the object identified by the given vertex id """
+        return super().get()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team")
+    def put(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Full Update endpoint for Templates """
+        return self.update()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team")
+    def patch(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Full Update endpoint for Templates """
+        return self.update(partial=True)
+
+core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>/",
+                      view_func=RetrieveUpdateTemplatesView
+                      .as_view("retrieve_update_templates"))
 
 
 # [TODO]
@@ -224,50 +365,3 @@ class CoreVertexRolesView(MethodView):
 core_app.add_url_rule(
     "/<vertex_type>/<vertex_id>/roles",
     view_func=CoreVertexRolesView.as_view("core_vertex_roles"))
-
-
-class ListCreateTemplatesView(MethodView):
-    """ Container for the LIST and CREATE endpoints for a given Team
-        NOTE: The endpoints have a `vertex_type` parameter only to be able
-            to reuse the same `has_core_vertex_permissions` permission
-    """
-
-    @jwt_required
-    @permissions.has_core_vertex_permissions
-    def get(self, vertex=None, vertex_type="team", vertex_id=None):
-        """ LIST Endpoint for a team's templates """
-        if not vertex:
-            return jsonify_response({"error": "Vertex not found"}, 404)
-
-        templates = TeamOwnsTemplate.all_team_templates(vertex.id)
-
-        schema = TemplateSchema(many=True)
-        response = json.loads(schema.dumps(templates).data)
-
-        return jsonify_response(response, 200)
-
-    @jwt_required
-    @permissions.has_core_vertex_permissions
-    def post(self, vertex=None, vertex_type="team", vertex_id=None):
-        """ CREATE Endpoint for a team's templates """
-        if not vertex:
-            return jsonify_response({"error": "Vertex not found"}, 404)
-
-        data = json.loads(request.data)
-
-        if "name" not in data or "canHaveChildren" not in data:
-            return jsonify_response({"error": "Invalid schema"}, 400)
-
-        template = Template.create(name=data["name"],
-                                   canHaveChildren=data["canHaveChildren"])
-        owns_edge = TeamOwnsTemplate.create(team=vertex.id,
-                                            template=template.id)
-
-        schema = TemplateSchema()
-        response = json.loads(schema.dumps(template).data)
-
-        return jsonify_response(response, 201)
-
-core_app.add_url_rule("/team/<vertex_id>/templates/",
-                      view_func=ListCreateTemplatesView
-                      .as_view("list_create_templates"))

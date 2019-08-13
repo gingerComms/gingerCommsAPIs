@@ -119,11 +119,39 @@ class Vertex(PropertyValidationMixin):
         """ Deletes this instance of the Vertex from the database """
         assert self.id, "Instance has not been initialized!"
 
-        query = f"g.V().has('id', '{self.id}').drop()"
+        query = f"g.V().has('{self.LABEL}', 'id', '{self.id}').drop()"
         res = client.submit(query).all().result()
 
         self.id = None
         return res
+
+    @classmethod
+    def update(cls, validated_data={}, vertex_id=None):
+        """ Updates the properties of the initialized vertex (this instance)
+            in the database with the provided data
+            The vertex can be identified either with the `vertex_id` parameter
+            or through the initialized class's `id` property
+
+            NOTE: It is assumed that this data has been validated already!
+            NOTE 2: This method DOES NOT update the instance in place!
+        """
+        assert "id" not in validated_data, "Can not update Vertex ID!"
+
+        vertex_id = vertex_id or getattr(self, "id", None)
+        assert vertex_id, "No vertex identifier provided!"
+
+        query = f"g.V().has('{cls.LABEL}', 'id', '{vertex_id}')"
+        for key, value in validated_data.items():
+            query += f".property('{key}', '{value}')"
+
+        res = client.submit(query).all().result()
+
+        # An empty list means that the query ran unsuccessfully
+        # (i.e. nonexistent vertex)
+        if not res:
+            return None
+
+        return cls.vertex_to_instance(res[0])
 
 
 class Edge(PropertyValidationMixin):

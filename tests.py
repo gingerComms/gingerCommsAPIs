@@ -19,9 +19,12 @@ class VpmoTestCase(TestCase):
         "password": "testpass"
     }
 
+
+
     def create_app(self):
         """ Inititalizes and returns a Flask App instance """
         app.config["TESTING"] = True
+        app.set_verbose = True
         return app
 
     def tearDown(self):
@@ -41,6 +44,24 @@ class VpmoTestCase(TestCase):
         url = "/auth/register"
         r = self.client.post(url, json=self.user_creds)
         self.assertEqual(r.status_code, 201)
+
+    def test_user_register_with_duplicate_username(self):
+        """ Test that user registration with an already existing username raises error"""
+        pass
+
+    def test_user_register_with_duplicate_email(self):
+        """ Test that user registration with an already existing email raises error"""
+        pass
+
+    def test_user_registeration_result_in_account_creation(self):
+        """ Test that user sign up results in automatic creation of a personal account"""
+        """ personal account is called account@[username]"""
+        pass
+
+    def test_account_duplicate_name(self):
+        """ Test that account with duplicate id cannot be created"""
+        """ account id is: [account name (defined by user)]@username """
+        """ example for account id: account@user123 """
 
     def test_user_login(self, username=None, password=None):
         """ Tests the authentication endpoint for users """
@@ -71,6 +92,12 @@ class VpmoTestCase(TestCase):
             headers={"Authorization": "Bearer %s" % token}
         )
         self.assertEqual(r.status_code, 201, r.json)
+
+    def test_team_linked_to_one_account(self):
+        """ test that team is linked to an account and only one account at a time"""
+        """ assert that team is owned by an account"""
+        """ assert that team is owned only by one account"""
+        pass
 
     def test_team_role_retrieve(self):
         """ Tests the Team Role retrieval endpoint """
@@ -393,6 +420,24 @@ class VpmoTestCase(TestCase):
         self.assertEqual(r.json["name"], "Template Name 2", r.json)
         self.assertEqual(len(r.json["properties"]), 2, r.json)
 
+    def test_template_owned_by_team(self):
+        """assert a team owns template"""
+        """assert only one team owns template"""
+        pass
+
+    def test_corevertex_inherits_from_template(self):
+        """assert that corevertex inherits from a template"""
+        """assert that corevertex inherits from one template"""
+        pass
+
+    def test_property_is_owned_by_template(self):
+        """assert that property can be not linked to any template"""
+        """assert that property can be linked to multiple templates"""
+        pass
+
+    def test_corevertex_is_owned_by_team(self):
+        """assert that one and only one team owns corevertex"""
+        pass
 
 if __name__ == "__main__":
     unittest.main()

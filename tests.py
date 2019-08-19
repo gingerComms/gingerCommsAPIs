@@ -53,16 +53,20 @@ class VpmoTestCase(TestCase):
         self.assertEqual(r.status_code, 201)
 
     def test_user_register_with_duplicate_username(self):
-        """ Test that user registration with an already existing username raises error"""
+        """ Test that user registration with an already existing
+            username raises error
+        """
         url = "/auth/register"
         first_response = self.client.post(url, json=self.user_creds)
         second_response = self.client.post(url, json=self.user_creds2)
         self.assertEqual(second_response.status_code, 400)
 
-
     def test_user_register_with_duplicate_email(self):
-        """ Test that user registration with an already existing email raises error"""
+        """ Test that user registration with an already existing email
+            raises error
+        """
         pass
+
 
     def test_user_registration_result_in_account_creation(self):
         """ Test that user sign up results in automatic creation of a personal account
@@ -81,7 +85,6 @@ class VpmoTestCase(TestCase):
             example for account id: account@user123
         """
         pass
-
 
     def test_user_login(self, username=None, password=None):
         """ Tests the authentication endpoint for users """
@@ -114,9 +117,11 @@ class VpmoTestCase(TestCase):
         self.assertEqual(r.status_code, 201, r.json)
 
     def test_team_linked_to_one_account(self):
-        """ test that team is linked to an account and only one account at a time"""
-        """ assert that team is owned by an account"""
-        """ assert that team is owned only by one account"""
+        """ Test that team is linked to an account and only one account
+            at a time.
+            - Assert that team is owned by an account
+            - Assert that team is owned only by one account
+        """
         pass
 
     def test_team_role_retrieve(self):
@@ -124,8 +129,8 @@ class VpmoTestCase(TestCase):
         logged_in = self.test_user_login()
         user, token = logged_in["user"]["id"], logged_in["token"]
         team = Team.create(name="Test Team")
-        edge = UserAssignedToCoreVertex.create(user=user, team=team.id,
-                                         role="admin")
+        edge = UserAssignedToCoreVertex.create(
+            user=user, team=team.id, role="admin")
 
         url = f"/team/{team.id}/roles"
         r = self.client.get(
@@ -151,8 +156,8 @@ class VpmoTestCase(TestCase):
         logged_in = self.test_user_login()
         user, token = logged_in["user"]["id"], logged_in["token"]
         team = Team.create(name="Test Team")
-        edge = UserAssignedToCoreVertex.create(user=user, team=team.id,
-                                         role="admin")
+        edge = UserAssignedToCoreVertex.create(
+            user=user, team=team.id, role="admin")
 
         second_user_pass = "test"
         second_user_pass_hash = bcrypt.generate_password_hash(
@@ -356,7 +361,7 @@ class VpmoTestCase(TestCase):
             json=data,
             headers={"Authorization": "Bearer %s" % token}
         )
-        self.assertEqual(r.status_code, 200, r.json     )
+        self.assertEqual(r.status_code, 200, r.json)
         self.assertEqual(r.json["title"], "New Name")
         self.assertEqual(data["templateData"], new_template_data)
 
@@ -441,22 +446,25 @@ class VpmoTestCase(TestCase):
         self.assertEqual(len(r.json["properties"]), 2, r.json)
 
     def test_template_owned_by_team(self):
-        """assert a team owns template"""
-        """assert only one team owns template"""
+        """ Assert a team owns template
+            Assert only one team owns template
+        """
         pass
 
     def test_corevertex_inherits_from_template(self):
-        """assert that corevertex inherits from a template"""
-        """assert that corevertex inherits from one template"""
+        """ Assert that corevertex inherits from a template
+            Assert that corevertex inherits from one template
+        """
         pass
 
     def test_property_is_owned_by_template(self):
-        """assert that property can be not linked to any template"""
-        """assert that property can be linked to multiple templates"""
+        """ Assert that property can be not linked to any template
+            Assert that property can be linked to multiple templates
+        """
         pass
 
     def test_corevertex_is_owned_by_team(self):
-        """assert that one and only one team owns corevertex"""
+        """ Assert that one and only one team owns corevertex """
         pass
 
 if __name__ == "__main__":

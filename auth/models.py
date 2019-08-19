@@ -78,6 +78,7 @@ class Account(Vertex):
     """ Represents an Account which can include an infinite number of Users
         and keeps track of all of the usage/subscriptions for team(s) under
         this account
+        account id = slugify(title)@[username]
     """
     LABEL = "account"
     properties = {

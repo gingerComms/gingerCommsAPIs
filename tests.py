@@ -19,6 +19,13 @@ class VpmoTestCase(TestCase):
         "password": "testpass"
     }
 
+    user_creds2 = {
+        "fullName": "Test User 2",
+        "email": "test2@gmail.com",
+        "username": "testuser",
+        "password": "testpass"
+    }
+
 
 
     def create_app(self):
@@ -47,21 +54,34 @@ class VpmoTestCase(TestCase):
 
     def test_user_register_with_duplicate_username(self):
         """ Test that user registration with an already existing username raises error"""
-        pass
+        url = "/auth/register"
+        first_response = self.client.post(url, json=self.user_creds)
+        second_response = self.client.post(url, json=self.user_creds2)
+        self.assertEqual(second_response.status_code, 400)
+
 
     def test_user_register_with_duplicate_email(self):
         """ Test that user registration with an already existing email raises error"""
         pass
 
-    def test_user_registeration_result_in_account_creation(self):
-        """ Test that user sign up results in automatic creation of a personal account"""
-        """ personal account is called account@[username]"""
-        pass
+    def test_user_registration_result_in_account_creation(self):
+        """ Test that user sign up results in automatic creation of a personal account
+            personal account id is account@[username]
+        """
+        url = "/auth/register"
+        r = self.client.post(url, json=self.user_creds)
+        username = r.json["username"]
+        user = User.filter(id=username)
+        self.assertIn("account@"+r.json["username"], user.get_held_accounts())
+
 
     def test_account_duplicate_name(self):
-        """ Test that account with duplicate id cannot be created"""
-        """ account id is: [account name (defined by user)]@username """
-        """ example for account id: account@user123 """
+        """ Test that account with duplicate id cannot be created
+            account id is: [account name (defined by user)]@username
+            example for account id: account@user123
+        """
+        pass
+
 
     def test_user_login(self, username=None, password=None):
         """ Tests the authentication endpoint for users """

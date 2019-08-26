@@ -10,7 +10,7 @@ import time
 from core.serializers import *
 
 
-class VpmoTestCase(TestCase):
+class VpmoTestCase:  # (TestCase):
     """ Contains all of the tests for the Vpmo API Endpoints """
     user_creds = {
         "fullName": "Test User",
@@ -25,8 +25,6 @@ class VpmoTestCase(TestCase):
         "username": "testuser",
         "password": "testpass"
     }
-
-
 
     def create_app(self):
         """ Inititalizes and returns a Flask App instance """

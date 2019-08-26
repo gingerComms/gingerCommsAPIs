@@ -10,7 +10,9 @@ Backend for the GingerCommsAPI - written in Python3 using Flask
 
 ## Running Tests
 
-All of the included unit tests can be run using the provided `tests.py` file by running `python tests.py`
+All of the included unit tests can be run using unittest's discover utility:
+
+``` python -m unittest discover . "*_test.py" ```
 
 ## TODO
 

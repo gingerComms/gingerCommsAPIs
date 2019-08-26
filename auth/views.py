@@ -38,7 +38,7 @@ def register():
 
     # Creating the User and it's primary account
     user = User.create(**data.data)
-    account = Account.create(title=f"Primary Account for {user.fullName}")
+    account = Account.create(title=f"myaccount@{user.username}")
     edge = UserHoldsAccount.create(user=user.id, account=account.id,
                                    relationType="primary")
 

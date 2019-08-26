@@ -27,7 +27,7 @@ class VpmoTestCase:  # (TestCase):
     }
 
     def create_app(self):
-        """ Inititalizes and returns a Flask App instance """
+        """ Initializes and returns a Flask App instance """
         app.config["TESTING"] = True
         app.set_verbose = True
         return app
@@ -59,30 +59,38 @@ class VpmoTestCase:  # (TestCase):
         second_response = self.client.post(url, json=self.user_creds2)
         self.assertEqual(second_response.status_code, 400)
 
+    @unittest.skip("pending development")
     def test_user_register_with_duplicate_email(self):
         """ Test that user registration with an already existing email
             raises error
         """
-        pass
-
 
     def test_user_registration_result_in_account_creation(self):
-        """ Test that user sign up results in automatic creation of a personal account
-            personal account id is account@[username]
         """
+            Given:              a non-registered user
+            when:               signs up
+            then:               a personal account is automatically created
+                                and gets associated with the user vertex
+            steps:              1- non-registered user signs up
+            expected result:    1- user gets registered with a unique username and password
+                                2- personal account is created
+                                3- User -holds-> Account
+                                4- account id account@[username]
+        """
+
         url = "/auth/register"
+
         r = self.client.post(url, json=self.user_creds)
-        username = r.json["username"]
+        username = r.json['username']
         user = User.filter(id=username)
         self.assertIn("account@"+r.json["username"], user.get_held_accounts())
 
-
+    @unittest.skip("pending development")
     def test_account_duplicate_name(self):
         """ Test that account with duplicate id cannot be created
             account id is: [account name (defined by user)]@username
             example for account id: account@user123
         """
-        pass
 
     def test_user_login(self, username=None, password=None):
         """ Tests the authentication endpoint for users """
@@ -114,13 +122,14 @@ class VpmoTestCase:  # (TestCase):
         )
         self.assertEqual(r.status_code, 201, r.json)
 
+    @unittest.skip("pending development")
     def test_team_linked_to_one_account(self):
         """ Test that team is linked to an account and only one account
             at a time.
             - Assert that team is owned by an account
             - Assert that team is owned only by one account
         """
-        pass
+
 
     def test_team_role_retrieve(self):
         """ Tests the Team Role retrieval endpoint """
@@ -443,27 +452,78 @@ class VpmoTestCase:  # (TestCase):
         self.assertEqual(r.json["name"], "Template Name 2", r.json)
         self.assertEqual(len(r.json["properties"]), 2, r.json)
 
+    @unittest.skip("pending development")
     def test_template_owned_by_team(self):
         """ Assert a team owns template
             Assert only one team owns template
         """
-        pass
 
+
+    @unittest.skip("pending development")
     def test_corevertex_inherits_from_template(self):
-        """ Assert that corevertex inherits from a template
-            Assert that corevertex inherits from one template
         """
-        pass
+            given:              system
+            when:               checking a given coreVertex
+            then:               it always inherits from a Template
+            steps:              1- create a CoreVertex
+                                2- link the CoreVertex to a Template
+                                3- link the same CoreVertex to another Template
+            expected result:    1- system enforces the selection of a Template during CoreVertex creation
+                                2- CoreVertex is only created with an inheritsFrom edge to a Template
+                                3- system triggers an error when trying to
 
+        """
+
+    @unittest.skip("pending development")
+    def test_corevertex_switch_to_another_template(self):
+        """
+            given:              user with admin access to CoreVertex
+            when:               trying to switch from one template to another
+            then:               coreVertex gets de-linked from the current Template
+                                and gets linked to the new Template
+            steps:              1- create or identify and existing a Template
+                                2- create a coreVertex inheriting from the Template above
+                                3- create or identify another Template
+                                4- shift inheritsFrom edge to the second Template
+            expected results:   1- coreVertex properties will be as of
+                                    the properties in the second Template
+        """
+
+    @unittest.skip("pending development")
     def test_property_is_owned_by_template(self):
-        """ Assert that property can be not linked to any template
-            Assert that property can be linked to multiple templates
         """
-        pass
+            given:              system
+            when:               checking a given property
+            then:               there is always a hasProperty edge to one template
+            expected result:    1- property (vertex) is linked to a template
+                                2- edge is Labeled hasProperty
 
+        """
+
+    @unittest.skip("pending development")
     def test_corevertex_is_owned_by_team(self):
         """ Assert that one and only one team owns corevertex """
-        pass
+
+
+    @unittest.skip("pending development")
+    def test_template_creation_by_non_admin(self):
+        """
+            Step:               1- non-admin user attempts to create a template
+            Expected result:    1- error response 'only team admin can create template'
+        """
+
+    @unittest.skip("pending development")
+    def test_template_creation_by_admin(self):
+        """
+            Given:              a team admin
+            when:               attempting to create a template
+            then:               I should be able to create a template linked to team
+            steps:              1- team admin user attempts to create a template
+            expected result:    1- template is created
+                                2- Team -owns-> Template
+                                3- User -created-> Template
+        """
+
 
 if __name__ == "__main__":
     unittest.main()

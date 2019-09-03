@@ -17,7 +17,12 @@ class RetrieveVertexMixin:
             raise ValueError("The `serializer_class` must be provided!")
 
         schema = self.serializer_class()
-        serialized_data = schema.dumps(self.get_object()).data
+        instance = self.get_object()
+        if not instance:
+            return jsonify_response({
+                "error": "Instance not found"
+            }, 404)
+        serialized_data = schema.dumps(instance).data
 
         return jsonify_response(json.loads(serialized_data), 200)
 

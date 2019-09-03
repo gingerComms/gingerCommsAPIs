@@ -85,6 +85,16 @@ class Account(Vertex):
         "title": str,
     }
 
+    def get_users(self):
+        """ Returns all users who "hold" this account through the
+            UserHoldsAccount edge
+        """
+        query = f"g.V().has('{self.LABEL}', 'id', '{self.id}')" + \
+            f".in('{UserHoldsAccount.LABEL}').hasLabel('{User.LABEL}')"
+        r = client.submit(query).all().result()
+
+        return [User.vertex_to_instance(i) for i in r]
+
 
 class User(Vertex):
     """ Represents a base User account which contains all of the details
@@ -101,7 +111,8 @@ class User(Vertex):
     def get_held_accounts(self):
         """ Returns all accounts "held by" (edge) this user """
         user_accounts_q = f"g.V().hasLabel('{self.LABEL}')" + \
-                           f".has('id', '{self.id}').out('holds')" + \
+                           f".has('id', '{self.id}')" + \
+                           f".out('{UserHoldsAccount.LABEL}')" + \
                            f".hasLabel('{Account.LABEL}')"
         user_accounts = client.submit(user_accounts_q).all().result()
         user_accounts = [i["id"] for i in user_accounts]

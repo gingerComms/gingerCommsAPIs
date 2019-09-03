@@ -4,6 +4,7 @@ import auth
 from .models import *
 from .serializers import *
 from . import permissions
+from auth import permissions as auth_permissions
 from utils.metaclasses import *
 from utils.generic_views import RetrieveUpdateAPIView
 from flask_jwt_extended import (
@@ -22,7 +23,7 @@ class ListCreateTeamsView(MethodView):
         Creating (POST) teams
     """
     @jwt_required
-    @permissions.account_held_by_user
+    @auth_permissions.account_held_by_user
     def get(self, account=None, user=None, account_id=None):
         """ A GET endpoint that returns all of the teams connected to this
             account
@@ -33,7 +34,7 @@ class ListCreateTeamsView(MethodView):
         return jsonify_response(schema.dumps(teams).data, 200)
 
     @jwt_required
-    @permissions.account_held_by_user
+    @auth_permissions.account_held_by_user
     def post(self, account=None, user=None, account_id=None):
         """ A POST endpoint used for the creation of new Teams through an
             account linked to the currently authenticated user

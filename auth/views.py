@@ -1,8 +1,11 @@
 from flask import Blueprint, request
+from flask.views import MethodView
 import json
 from .models import *
 from .serializers import *
+from . import permissions
 from utils.general_utils import *
+from utils.generic_views import RetrieveUpdateAPIView
 from flask_jwt_extended import (
     jwt_required, get_jwt_identity,
     create_access_token
@@ -112,3 +115,61 @@ def create_account():
         "title": account.title
     }
     return jsonify_response(response, 201)
+
+
+class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
+    """ Provides functionality to add or remove users from Accounts
+        through secondary UserHoldsAccount edges
+
+        TODO: Also add functionality to REMOVE user from account (DELETE)
+    """
+    serializer = AccountDetailSchema
+    vertex_class = Account
+
+    def get_object(self):
+        """ Returns the account matching the account id in the url """
+        account = Account.filter(id=account_id)
+
+        return account[0] if account else None
+
+    @jwt_required
+    @permissions.account_held_by_user
+    def get(self, account=None, user=None, account_id=None):
+        """ Overwritten to add the required User-holds-account permission """
+        self.get_object = lambda: account
+        return super().get()
+
+    @jwt_required
+    @permissions.account_held_by_user
+    def put(self, account=None, user=None, account_id=None):
+        data = json.loads(request.data)
+
+        if "user" not in data:
+            return jsonify_response({
+                "error": "User not provided."
+            }, 401)
+
+        user_query = f"g.V().has('{User.LABEL}', 'id', '{data['user']}')"
+
+        # Making sure that the user doesn't have an existing
+        # relationship with the account
+        existing_edge_query = user_query + \
+            f".outE('{UserHoldsAccount.LABEL}')" + \
+            f".inV().has('{Account.LABEL}', 'id', '{account.id}')"
+        existing_primary_edge = client.submit(existing_edge_query) \
+            .all().result()
+        if existing_primary_edge:
+            return jsonify_response({
+                "error": "User already has a relation with the account"
+            }, 401)
+
+        # Creating a new edge from the user to the account
+        edge = UserHoldsAccount.create(
+            user=data["user"], account=account.id, relationType="secondary")
+
+        data = AccountDetailSchema().dumps(account).data
+        return jsonify_response(json.loads(data), 200)
+
+auth_app.add_url_rule("/account/<account_id>/add_remove_user",
+                      view_func=AddRemoveUserFromAccountView.as_view(
+                          "add_remove_user_from_account"))

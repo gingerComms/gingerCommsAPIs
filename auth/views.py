@@ -12,6 +12,10 @@ from flask_jwt_extended import (
 )
 from flask_bcrypt import (
     generate_password_hash, check_password_hash)
+from db.exceptions import (
+    CustomValidationFailedException,
+    ObjectCanNotBeDeletedException
+)
 
 
 auth_app = Blueprint("auth", __name__)
@@ -142,6 +146,9 @@ class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
     @jwt_required
     @permissions.account_held_by_user
     def put(self, account=None, user=None, account_id=None):
+        """ Endpoint used for adding a user to the given account with a
+            secondary relationship
+        """
         data = json.loads(request.data)
 
         if "user" not in data:
@@ -149,26 +156,42 @@ class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
                 "error": "User not provided."
             }, 401)
 
-        user_query = f"g.V().has('{User.LABEL}', 'id', '{data['user']}')"
-
-        # Making sure that the user doesn't have an existing
-        # relationship with the account
-        existing_edge_query = user_query + \
-            f".outE('{UserHoldsAccount.LABEL}')" + \
-            f".inV().has('{Account.LABEL}', 'id', '{account.id}')"
-        existing_primary_edge = client.submit(existing_edge_query) \
-            .all().result()
-        if existing_primary_edge:
-            return jsonify_response({
-                "error": "User already has a relation with the account"
-            }, 401)
-
         # Creating a new edge from the user to the account
-        edge = UserHoldsAccount.create(
-            user=data["user"], account=account.id, relationType="secondary")
+        try:
+            edge = UserHoldsAccount.create(
+                user=data["user"], account=account.id,
+                relationType="secondary")
+        except CustomValidationFailedException as e:
+            return jsonify_response({
+                "error": e.message
+            }, 400)
 
-        data = AccountDetailSchema().dumps(account).data
-        return jsonify_response(json.loads(data), 200)
+        response = AccountDetailSchema().dumps(account).data
+        return jsonify_response(json.loads(response), 200)
+
+    @jwt_required
+    @permissions.account_held_by_user
+    def delete(self, account=None, user=None, account_id=None):
+        """ Endpoint used for removing a User-Account edge """
+        data = json.loads(request.data)
+        target_user = data["user"]
+
+        edge = UserHoldsAccount.filter(outv_id=target_user, inv_id=account.id)
+
+        if not edge:
+            return jsonify_response({
+                "error": "No edge exists between the targeted user and account"
+            }, 404)
+
+        try:
+            edge[0].delete()
+        except ObjectCanNotBeDeletedException as e:
+            return jsonify_response({
+                "error": e.message
+            }, 400)
+
+        response = AccountDetailSchema().dumps(account).data
+        return jsonify_response(json.loads(response), 200)
 
 auth_app.add_url_rule("/account/<account_id>/add_remove_user",
                       view_func=AddRemoveUserFromAccountView.as_view(

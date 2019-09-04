@@ -1,4 +1,8 @@
 from db.engine import Vertex, Edge, client
+from db.exceptions import (
+    CustomValidationFailedException,
+    ObjectCanNotBeDeletedException
+)
 import core
 
 
@@ -14,6 +18,37 @@ class UserHoldsAccount(Edge):
     properties = {
         "relationType": str  # primary | secondary
     }
+
+    @classmethod
+    def custom_validation(cls, data, outv_id=None, inv_id=None):
+        """ Provides custom validation before creation that verifies that
+            1) The User doesn't already hold the account in some form, and;
+            2) The Account targeted doesn't already have a primary holder
+                while a new primary holder is going to be added upon this
+                edge's creation [TODO]
+        """
+        user_query = f"g.V().has('{User.LABEL}', 'id', '{outv_id}')"
+        existing_edge_query = user_query + \
+            f".outE('{cls.LABEL}')" + \
+            f".inV().has('{Account.LABEL}', 'id', '{inv_id}')"
+        existing_primary_edge = client.submit(existing_edge_query) \
+            .all().result()
+
+        if existing_primary_edge:
+            raise CustomValidationFailedException(
+                "User already holds account!")
+
+        return data
+
+    def delete(self):
+        """ Overwritten to provide custom validation before deleting the
+            edge
+        """
+        if self.relationType == "primary":
+            raise ObjectCanNotBeDeletedException(
+                "Can not remove a User from a primary Account")
+
+        return super().delete()
 
 
 class AccountOwnsTeam(Edge):

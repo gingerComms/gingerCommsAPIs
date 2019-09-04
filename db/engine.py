@@ -78,11 +78,19 @@ class Vertex(PropertyValidationMixin):
         return instance
 
     @classmethod
+    def custom_validation(self, data):
+        """ A Validation method meant to be overridden by specific vertex
+             Models and all Vertex-specific validation should go in here
+        """
+        return data
+
+    @classmethod
     def create(cls, **data):
         """ Receives JSON as input and creates a new Vertex
             with the provided attributes
         """
         validated_data = cls.validate_input(data)
+        validated_data = cls.custom_validation(data)
 
         query = f"g.addV('{cls.LABEL}')" + \
             f".property('{DATABASE_SETTINGS['partition_key']}', " + \
@@ -184,6 +192,13 @@ class Edge(PropertyValidationMixin):
         return instance
 
     @classmethod
+    def custom_validation(self, data, outv_id=None, inv_id=None):
+        """ A Validation method meant to be overridden by specific edge Models
+            and all Edge-specific validation should go in here
+        """
+        return data
+
+    @classmethod
     def create(cls, outv_id=None, inv_id=None, **data):
         """ Receives the out/in vertice ids and creates an edge with the given
             properties between the two vertices
@@ -196,6 +211,8 @@ class Edge(PropertyValidationMixin):
         assert isinstance(in_v, str)
 
         validated_data = cls.validate_input(data)
+        validated_data = cls.custom_validation(
+            validated_data, outv_id=out_v, inv_id=in_v)
 
         query = f"g.V().has('id', '{out_v}').addE('{cls.LABEL}')" + \
             f".to(g.V().has('id', '{in_v}'))"
@@ -209,11 +226,19 @@ class Edge(PropertyValidationMixin):
         return instance
 
     @classmethod
-    def filter(cls, **properties):
-        """ Returns all edges matching the given properties
-            NOTE: More complicated queries must be formulated manually.
+    def filter(cls, outv_id=None, inv_id=None, **properties):
+        """ Returns all edges matching the given properties between the
+            given out and in vertices
         """
-        query = f"g.E().hasLabel('{cls.LABEL}')"
+        # Filtering by the out and in vertices if provided, otherwise just
+        # the properties
+        if outv_id and inv_id:
+            query = f"g.V().has('{cls.OUTV_LABEL}', 'id', '{outv_id}')" + \
+                f".outE('{cls.LABEL}').as('e')" + \
+                f".inV().has('{cls.INV_LABEL}', 'id', '{inv_id}')" + \
+                f".select('e')"
+        else:
+            query = f"g.E().hasLabel('{cls.LABEL}')"
 
         for key, value in properties.items():
             query += f".has('{key}', '{value}')"

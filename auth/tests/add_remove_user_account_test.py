@@ -5,12 +5,14 @@ from db.engine import client
 import copy
 
 
-class AddUserToAccountTestCase(FlaskTestCase):
+class AddRemoveUserAccountTestCase(FlaskTestCase):
     """ Contains all of the test cases to confirm that:
         1) Only a User holding an account (through primary/secondary edge)
             can add new Users to the Account, and;
         2) User can be added to infinite number of accounts with a
             "secondary" edge (UserHoldsAccount)
+        3) A User can not be removed from an Account it is holding through
+            a primary relationship
     """
     def create_user_with_details(self, user_details):
         """ Submits a Gremlin query for creating a new user vertex
@@ -23,13 +25,14 @@ class AddUserToAccountTestCase(FlaskTestCase):
         result = client.submit(user_query).all().result()[0]
         return User.vertex_to_instance(result)
 
-    def create_holding_account_edge(self, user, account):
+    def create_account_edge(self, user, account, edge_type="primary"):
         """ Creates the UserHoldsAccount edge between the given
             user and account
         """
         query = f"g.V().has('{User.LABEL}', 'id', '{user.id}')" + \
             f".addE('{UserHoldsAccount.LABEL}')" + \
-            f".to(g.V().has('{Account.LABEL}', 'id', '{account.id}'))"
+            f".to(g.V().has('{Account.LABEL}', 'id', '{account.id}'))" + \
+            f".property('relationType', '{edge_type}')"
         r = client.submit(query).all().result()[0]
         edge = UserHoldsAccount.edge_to_instance(r)
 
@@ -96,7 +99,7 @@ class AddUserToAccountTestCase(FlaskTestCase):
         self.assertEqual(r.status_code, 403)
 
         # Successful (User holds account + is authenticated)
-        self.create_holding_account_edge(self.holding_user, self.account_1)
+        self.create_account_edge(self.holding_user, self.account_1)
         r = self.client.put(
             url,
             json={
@@ -110,8 +113,8 @@ class AddUserToAccountTestCase(FlaskTestCase):
         """ Tests that the user can be inserted into an infinite number of
             accounts with a primary relationship
         """
-        self.create_holding_account_edge(self.holding_user, self.account_1)
-        self.create_holding_account_edge(self.holding_user, self.account_2)
+        self.create_account_edge(self.holding_user, self.account_1)
+        self.create_account_edge(self.holding_user, self.account_2)
         token = create_access_token(identity=self.holding_user)
 
         # Adding to the first account
@@ -133,3 +136,31 @@ class AddUserToAccountTestCase(FlaskTestCase):
             headers=self.generate_headers(token)
         )
         self.assertEqual(r.status_code, 200)
+
+    def test_user_cannot_be_removed_from_primary_account(self):
+        """ Asserts that the user can not be removed from an account it holds
+            through a primary edge
+        """
+        self.create_account_edge(self.holding_user, self.account_1)
+        token = create_access_token(identity=self.holding_user)
+
+        # Failure test - user can not be removed from primary account
+        r = self.client.delete(
+            self.url.format(account_id=self.account_1.id),
+            json={
+                "user": self.holding_user.id
+            },
+            headers=self.generate_headers(token)
+        )
+        self.assertEqual(r.status_code, 400)
+
+        # Success test - user can be removed from secondary account
+        self.create_account_edge(self.new_user, self.account_1, "secondary")
+        r = self.client.delete(
+            self.url.format(account_id=self.account_1.id),
+            json={
+                "user": self.new_user.id
+            },
+            headers=self.generate_headers(token)
+        )
+        self.assertEqual(r.status_code, 200, r.json)

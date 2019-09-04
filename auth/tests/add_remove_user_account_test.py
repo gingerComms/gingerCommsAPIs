@@ -18,25 +18,16 @@ class AddRemoveUserAccountTestCase(FlaskTestCase):
         """ Submits a Gremlin query for creating a new user vertex
             with the given details
         """
-        user_query = f"g.addV('{User.LABEL}')" + \
-            f".property('{self.partition_key}', '{User.LABEL}')"
-        for prop, val in user_details.items():
-            user_query += f".property('{prop}', '{val}')"
-        result = client.submit(user_query).all().result()[0]
-        return User.vertex_to_instance(result)
+        return User.create(**user_details)
 
     def create_account_edge(self, user, account, edge_type="primary"):
         """ Creates the UserHoldsAccount edge between the given
             user and account
         """
-        query = f"g.V().has('{User.LABEL}', 'id', '{user.id}')" + \
-            f".addE('{UserHoldsAccount.LABEL}')" + \
-            f".to(g.V().has('{Account.LABEL}', 'id', '{account.id}'))" + \
-            f".property('relationType', '{edge_type}')"
-        r = client.submit(query).all().result()[0]
-        edge = UserHoldsAccount.edge_to_instance(r)
+        edge = UserHoldsAccount.create(
+            user=user.id, account=account.id, relationType=edge_type)
 
-        return r
+        return edge
 
     def setUp(self):
         """ Fixtures for the test cases;
@@ -58,19 +49,8 @@ class AddRemoveUserAccountTestCase(FlaskTestCase):
         self.new_user_details["email"] = "test@user2.com"
         self.new_user = self.create_user_with_details(self.new_user_details)
 
-        self.account1_title = "Account1"
-        self.account2_title = "Account2"
-
-        account_query = f"g.addV('{Account.LABEL}')" + \
-            f".property('{self.partition_key}', '{Account.LABEL}')" + \
-            ".property('title', '{title}')"
-
-        account1_r = client.submit(
-            account_query.format(title=self.account1_title)).all().result()[0]
-        self.account_1 = Account.vertex_to_instance(account1_r)
-        account2_r = client.submit(
-            account_query.format(title=self.account2_title)).all().result()[0]
-        self.account_2 = Account.vertex_to_instance(account2_r)
+        self.account_1 = Account.create(title="Account1")
+        self.account_2 = Account.create(title="Account2")
 
     def test_only_holding_user_can_add_user(self):
         """ Tests that the user can only be added to an account by users

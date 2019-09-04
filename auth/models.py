@@ -62,6 +62,19 @@ class AccountOwnsTeam(Edge):
     properties = {}
 
     @classmethod
+    def custom_validation(cls, data, outv_id=None, inv_id=None):
+        """ Provides custom validation to confirm that:
+            1) This team (inv) isn't already owned by another team
+        """
+        existing_edge = AccountOwnsTeam.filter(
+            outv_id=outv_id, inv_id=inv_id)
+        if existing_edge:
+            raise CustomValidationFailedException(
+                f"Targeted team is already owned by another account")
+
+        return data
+
+    @classmethod
     def get_teams(cls, account_id):
         """ Returns all teams owned by this account id """
         query = f"g.V().hasLabel('{Account.LABEL}')" + \

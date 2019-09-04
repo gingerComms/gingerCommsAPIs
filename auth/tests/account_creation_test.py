@@ -27,18 +27,12 @@ class AccountCreationTestCase(FlaskTestCase):
         }
 
         # Creating a user - since account creation requires a user
-        self.user_details = {
-            "fullName": "Test User",
-            "email": "test@user.com",
-            "username": "testuser",
-            "password": "testpasssword"
-        }
-        user_query = f"g.addV('{User.LABEL}')" + \
-            f".property('{self.partition_key}', '{User.LABEL}')"
-        for prop, val in self.user_details.items():
-            user_query += f".property('{prop}', '{val}')"
-        result = client.submit(user_query).all().result()[0]
-        self.user = User.vertex_to_instance(result)
+        self.user = User.create(**{
+            "username": "TestU",
+            "email": "TestEmail@g.com",
+            "password": "Test",
+            "fullName": "Test 2"
+        })
 
     def test_successful_account_creation(self):
         """ Tests that the Account creation API can successfully create

@@ -49,7 +49,10 @@ class ListCreateTeamsView(MethodView):
         user_edge = auth.UserAssignedToCoreVertex.create(
             user=user.id, team=team.id, role="admin")
 
-        return jsonify_response(schema.dumps(team).data, 201)
+        return jsonify_response({
+            "name": team.name,
+            "id": team.id
+        }, 201)
 
 core_app.add_url_rule("/account/<account_id>/teams",
                       view_func=ListCreateTeamsView.as_view("teams"))

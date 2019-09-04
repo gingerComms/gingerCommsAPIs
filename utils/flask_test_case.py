@@ -9,6 +9,13 @@ class FlaskTestCase(TestCase):
     """ Contains the basic flask app-creation method and fixtures that are
         shared among all of the unit tests
     """
+    test_user_details = {
+        "username": "TestU",
+        "email": "TestE@g.com",
+        "password": "TestPass",
+        "fullName": "Test"
+    }
+
     def create_app(self):
         """ Inititalizes and returns a Flask App instance """
         app.config["TESTING"] = True

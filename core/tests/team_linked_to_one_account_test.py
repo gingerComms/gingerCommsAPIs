@@ -18,12 +18,7 @@ class TestTeamLinkedToOneAccountTestCase(FlaskTestCase):
         """
         self.team = Team.create(name="TestTeam")
         self.account = Account.create(title="TestAccount")
-        self.user = User.create(**{
-            "username": "TestU",
-            "email": "TestE@g.com",
-            "password": "TestPass",
-            "fullName": "Test"
-        })
+        self.user = User.create(**self.test_user_details)
         UserHoldsAccount.create(
             user=self.user.id, account=self.account.id, relationType="primary")
 

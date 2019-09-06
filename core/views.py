@@ -209,7 +209,7 @@ class ListCreateTemplatesView(MethodView):
 
         return jsonify_response(response, 201)
 
-core_app.add_url_rule("/team/<vertex_id>/templates/",
+core_app.add_url_rule("/team/<vertex_id>/templates",
                       view_func=ListCreateTemplatesView
                       .as_view("list_create_templates"))
 

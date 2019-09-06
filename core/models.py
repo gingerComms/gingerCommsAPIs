@@ -1,5 +1,9 @@
 from db.engine import Vertex, Edge, client
 from settings import DATABASE_SETTINGS
+from db.exceptions import (
+    CustomValidationFailedException,
+    ObjectCanNotBeDeletedException
+)
 
 
 class TeamOwnsTemplate(Edge):
@@ -12,6 +16,20 @@ class TeamOwnsTemplate(Edge):
     OUTV_LABEL = "team"
     INV_LABEL = "template"
     properties = {}
+
+    @classmethod
+    def custom_validation(cls, data, outv_id=None, inv_id=None):
+        """ Provides validation to confirm that a template is only ever
+            owned by one team at a time
+        """
+        existing_edge_q = f"g.V().has('{cls.INV_LABEL}', 'id', '{inv_id}')" + \
+            f".inE('owns')"
+        existing_edge = client.submit(existing_edge_q).all().result()
+        if existing_edge:
+            raise CustomValidationFailedException(
+                "Template can only be owned by a single template at a time!")
+
+        return data
 
     @classmethod
     def all_team_templates(cls, team_id):
@@ -59,6 +77,40 @@ class CoreVertexInheritsFromTemplate(Edge):
     OUTV_LABEL = "coreVertex"
     INV_LABEL = "template"
     properties = {}
+
+    @classmethod
+    def custom_validation(cls, data, outv_id=None, inv_id=None):
+        """ Provides custom validation to confirm that:
+            1) A Core Vertex only inherits from one template at a time and
+            2) Core Vertex only inherits froom a template owned by the vertex's
+                team [TODO]
+        """
+        # Verification for [1]
+        existing_template_query = \
+            f"g.V().has('{cls.OUTV_LABEL}', 'id', '{outv_id}')" + \
+            f".out('{cls.LABEL}')"
+        existing_template = client.submit(
+            existing_template_query).all().result()
+        if existing_template:
+            raise CustomValidationFailedException(
+                "A CoreVertex can only inherit from a single Template "
+                "at a time")
+
+        # Verification for [2]
+        team_template_query = \
+            f"g.V().has('{CoreVertex.LABEL}', 'id', '{outv_id}')" + \
+            f".until(hasLabel('{Team.LABEL}'))" + \
+            f".repeat(__.in('{CoreVertexOwnership.LABEL}')).emit()" + \
+            f".out('{TeamOwnsTemplate.LABEL}')" + \
+            f".has('{Template.LABEL}', 'id', '{inv_id}')"
+        template_exists = client.submit(
+            team_template_query).all().result()
+        if not template_exists:
+            raise CustomValidationFailedException(
+                "The provided template either doesn't exist, or is not owned"
+                "by the same team as the CoreVertex")
+
+        return data
 
 
 class Team(Vertex):
@@ -210,3 +262,16 @@ class CoreVertexOwnership(Edge):
         result = client.submit(query).all().result()
 
         return [CoreVertex.vertex_to_instance(i) for i in result]
+
+    @classmethod
+    def get_root(cls, core_vertex_id):
+        """ Returns the team vertex at the base of this core-vertex
+            ownership tree
+            [UNTESTED]
+        """
+        query = \
+            f"g.V().has('{CoreVertex.LABEL}', 'id', '{core_vertex_id}')" + \
+            f".until(hasLabel('{Team.LABEL}')).repeat(out('{cls.LABEL}'))"
+
+        team = client.submit(query).all().result()[0]
+        return Team.vertex_to_instance(team)

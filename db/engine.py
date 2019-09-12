@@ -199,13 +199,19 @@ class Edge(PropertyValidationMixin):
         return data
 
     @classmethod
-    def create(cls, outv_id=None, inv_id=None, **data):
+    def create(cls,
+               outv_id=None, inv_id=None,
+               outv_label=None, inv_label=None,
+               **data):
         """ Receives the out/in vertice ids and creates an edge with the given
             properties between the two vertices
         """
         # To allow support of the same label relationships
+        # :: provide outv_id and inv_id parameters if INV_LABEL == OUTV_LABEL
         out_v = outv_id or data.pop(cls.OUTV_LABEL)
         in_v = inv_id or data.pop(cls.INV_LABEL)
+        OUTV_LABEL = outv_label or cls.OUTV_LABEL
+        INV_LABEL = inv_label or cls.INV_LABEL
 
         assert isinstance(out_v, str)
         assert isinstance(in_v, str)
@@ -214,8 +220,9 @@ class Edge(PropertyValidationMixin):
         validated_data = cls.custom_validation(
             validated_data, outv_id=out_v, inv_id=in_v)
 
-        query = f"g.V().has('id', '{out_v}').addE('{cls.LABEL}')" + \
-            f".to(g.V().has('id', '{in_v}'))"
+        query = f"g.V().has('{OUTV_LABEL}', 'id', '{out_v}')" + \
+            f".addE('{cls.LABEL}')" + \
+            f".to(g.V().has('{INV_LABEL}', 'id', '{in_v}'))"
 
         for key, value in validated_data.items():
             query += f".property('{key}', '{value}')"

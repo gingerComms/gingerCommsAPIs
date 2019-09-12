@@ -26,8 +26,6 @@ class TemplateCreationTestCase(FlaskTestCase):
     def test_template_can_only_be_created_by_team_admin(self):
         """ Asserts that only the team admin should be able to create a
             template for a team
-
-            [TODO]: Unfunctioning due to lack of permissions implementation atm
         """
         token = create_access_token(self.user)
         data = {
@@ -51,7 +49,8 @@ class TemplateCreationTestCase(FlaskTestCase):
         self.assertEqual(r.status_code, 403)
 
         # Success: Authorized by team admin
-        UserAssignedToCoreVertex.create(team=self.team.id, user=self.user.id)
+        UserAssignedToCoreVertex.create(
+            team=self.team.id, user=self.user.id, role="team_lead")
         r = self.client.post(
             self.url,
             json=data,
@@ -63,7 +62,7 @@ class TemplateCreationTestCase(FlaskTestCase):
             any given time
         """
         team_2 = Team.create(name="Test Team 2")
-        
+
         # Creating an owned edge to the first team
         template = Template.create(name="TestTemplate", canHaveChildren=True)
         TeamOwnsTemplate.create(team=self.team.id, template=template.id)

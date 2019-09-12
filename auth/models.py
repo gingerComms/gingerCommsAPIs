@@ -97,20 +97,23 @@ class UserAssignedToCoreVertex(Edge):
     """ Represents a user -> team|coreVertex connection from an Account's
         User to a Team or CoreVertex.
     """
-    LABEL = "assigned_to"
+    LABEL = "assignedTo"
     OUTV_LABEL = "user"
     # This could be overridden during init (team | coreVertex)
     INV_LABEL = "team"
+    # Could be a choice between: ["team_lead", "team_admin", "team_member"]
+    # for teams, and: ["cv_lead", "cv_admin", "cv_member"] for core_vertices
     properties = {
-        "role": str  # admin | lead | member
+        "role": str
     }
 
     @classmethod
-    def get_user_assigned_role(cls, core_vertex_id, user_id):
+    def get_user_assigned_role(cls, core_vertex_id, user_id, inv_label=None):
         """ Returns the role (UserAssignedToCoreVertex instance) assigned
             to the user for the given core-vertex
         """
-        query = f"g.V().hasLabel('{cls.INV_LABEL}')" + \
+        INV_LABEL = inv_label or cls.INV_LABEL
+        query = f"g.V().hasLabel('{INV_LABEL}')" + \
             f".has('id', '{core_vertex_id}').inE('{cls.LABEL}').as('e')" + \
             f".outV().has('id', '{user_id}').select('e')"
         result = client.submit(query).all().result()

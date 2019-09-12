@@ -104,9 +104,9 @@ class ListCreateCoreVertexView(MethodView):
         core_vertex = CoreVertex.create(title=data["title"], templateData="{}")
         template_edge = CoreVertexInheritsFromTemplate.create(
             coreVertex=core_vertex.id, template=template.id)
-        child_edge = CoreVertexOwnership(
-            outv_label=vertex_type, inv_label="coreVertex").create(
-            outv_id=vertex_id, inv_id=core_vertex.id)
+        child_edge = CoreVertexOwnership.create(
+            outv_id=vertex_id, inv_id=core_vertex.id,
+            inv_label="coreVertex", outv_label=vertex_type)
 
         response = {
             "id": core_vertex.id,
@@ -140,7 +140,9 @@ class RetrieveUpdateCoreVertexView(RetrieveUpdateAPIView):
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="coreVertex")
+        overwrite_vertex_type="coreVertex",
+        direct_allowed_roles=[],  # TODO: Add roles here
+        indirect_allowed_roles=["team_admin", "team_lead"])
     def get(self, vertex=None, vertex_id=None, **kwargs):
         """ Returns the object identified by the given vertex id
             - Overridden to add the decorators, and reuse the Vertex
@@ -151,28 +153,35 @@ class RetrieveUpdateCoreVertexView(RetrieveUpdateAPIView):
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="coreVertex")
+        overwrite_vertex_type="coreVertex",
+        direct_allowed_roles=[],  # TODO: Add roles here
+        indirect_allowed_roles=["team_admin"])
     def put(self, vertex=None, vertex_id=None, **kwargs):
         """ Full Update endpoint for coreVertices """
         return self.update()
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="coreVertex")
+        overwrite_vertex_type="coreVertex",
+        direct_allowed_roles=[],  # TODO: Add roles here
+        indirect_allowed_roles=["team_admin"])
     def patch(self, vertex=None, vertex_id=None, **kwargs):
         """ Full Update endpoint for coreVertices """
         return self.update(partial=True)
 
-core_app.add_url_rule("/coreVertex/<vertex_id>/",
+core_app.add_url_rule("/coreVertex/<vertex_id>",
                       view_func=RetrieveUpdateCoreVertexView
                       .as_view("retrieve_update_core_vertices"))
 
 
 class ListCreateTemplatesView(MethodView):
-    """ Container for the LIST and CREATE endpoints for a given Team """
+    """ Container for the LIST and CREATE Template endpoints
+        for a given Team
+    """
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="team")
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_member", "team_lead", "team_admin"])
     def get(self, vertex=None, vertex_type="team", vertex_id=None):
         """ LIST Endpoint for a team's templates """
         if not vertex:
@@ -187,7 +196,8 @@ class ListCreateTemplatesView(MethodView):
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="team")
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_member", "team_lead", "team_admin"])
     def post(self, vertex=None, vertex_type="team", vertex_id=None):
         """ CREATE Endpoint for a team's templates """
         if not vertex:
@@ -301,9 +311,8 @@ class CoreVertexRolesView(MethodView):
         if error:
             return error
 
-        assigned_role = auth.UserAssignedToCoreVertex(
-            inv_label=vertex_type).get_user_assigned_role(
-            core_vertex.id, target_user.id)
+        assigned_role = auth.UserAssignedToCoreVertex.get_user_assigned_role(
+            core_vertex.id, target_user.id, inv_label=vertex_type)
 
         return jsonify_response({"role": getattr(assigned_role, "role", None)})
 
@@ -328,9 +337,9 @@ class CoreVertexRolesView(MethodView):
         if target_user.id == current_user:
             target_user_role = current_user_role
         else:
-            target_user_role = auth.UserAssignedToCoreVertex(
-                inv_label=vertex_type) \
-                .get_user_assigned_role(core_vertex.id, target_user.id)
+            target_user_role = auth.UserAssignedToCoreVertex \
+                .get_user_assigned_role(
+                    core_vertex.id, target_user.id, inv_label=vertex_type)
 
         # Validation for whether the user has enough permissions to even
         # make this role update
@@ -354,9 +363,10 @@ class CoreVertexRolesView(MethodView):
             target_user_role.delete()
 
         # Creating a new assignment for the teamuser pair with the given role
-        edge = auth.UserAssignedToCoreVertex(inv_label=vertex_type) \
+        edge = auth.UserAssignedToCoreVertex \
             .create(user=target_user.id,
                     role=requested_role,
+                    inv_label=vertex_type,
                     **{vertex_type: core_vertex.id})
 
         return jsonify_response({

@@ -29,7 +29,7 @@ class FlaskTestCase(TestCase):
     def tearDown(self):
         """ Clears the database after each test """
         # This is to keep the request rate under control for CosmosDB Emulator
-        time.sleep(1)
+        time.sleep(2)
         client.submit("g.V().drop()").all().result()
 
     def generate_headers(self, token):

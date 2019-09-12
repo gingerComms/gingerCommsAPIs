@@ -4,6 +4,7 @@ from db.exceptions import (
     CustomValidationFailedException,
     ObjectCanNotBeDeletedException
 )
+import auth
 
 
 class TeamOwnsTemplate(Edge):
@@ -123,6 +124,19 @@ class Team(Vertex):
         "name": str
     }
 
+    def get_user_permissions(self, user_id):
+        """ Returns the roles assigned to the given user for this
+            Team
+        """
+        query = f"g.V().has('{self.LABEL}', 'id', '{self.id}')" + \
+            f".inE('{auth.UserAssignedToCoreVertex.LABEL}').as('e')" + \
+            f".outV().has('{auth.User.LABEL}', 'id', '{user_id}')" + \
+            f".select('e')"
+        result = client.submit(query).all().result()
+
+        return auth.UserAssignedToCoreVertex.edge_to_instance(result[0]).role \
+            if result else None
+
 
 class CoreVertex(Vertex):
     """ Represents a CoreVertex instance that is based off of (inherits from)
@@ -133,6 +147,36 @@ class CoreVertex(Vertex):
         "title": str,
         "templateData": str
     }
+
+    def get_user_permissions(self, user_id):
+        """ Returns all roles assigned to the given user for this CoreVertex
+            as a dictionary of
+            {direct_role: <edge>, indirect_roles: [edges...]}
+        """
+        # This will return all of the permissions the user has for all of the
+        # vertices in this vertex's path to the root
+        query = f"g.V().has('{self.LABEL}', 'id', '{self.id}')" + \
+            f".until(__.hasLabel('{Team.LABEL}'))" + \
+            f".repeat(__.in('{CoreVertexOwnership.LABEL}')).path()" + \
+            f".unfold().inE('{auth.UserAssignedToCoreVertex.LABEL}')" + \
+            f".as('e').outV().has('{auth.User.LABEL}', 'id', '{user_id}')" + \
+            f".select('e')"
+        results = client.submit(query).all().result()
+
+        roles = {
+            "indirect_roles": [],
+            "direct_role": None
+        }
+
+        for edge in results:
+            if edge["inV"] == self.id:
+                roles["direct_role"] = auth.UserAssignedToCoreVertex \
+                    .edge_to_instance(edge).role
+            else:
+                roles["indirect_roles"].append(
+                    auth.UserAssignedToCoreVertex.edge_to_instance(edge).role)
+
+        return roles
 
 
 class TemplateProperty(Vertex):
@@ -251,6 +295,20 @@ class CoreVertexOwnership(Edge):
     OUTV_LABEL = "team"
     INV_LABEL = CoreVertex.LABEL
     properties = {}
+
+    @classmethod
+    def custom_validation(cls, data, outv_id=None, inv_id=None):
+        """ Provides validation to confirm that a coreVertex is only ever owned
+            by one team/coreVertex at a time
+        """
+        existing_edge_q = f"g.V().has('{cls.INV_LABEL}', 'id', '{inv_id}')" + \
+            f".inE('owns')"
+        existing_edge = client.submit(existing_edge_q).all().result()
+        if existing_edge:
+            raise CustomValidationFailedException(
+                "CoreVertex can only be owned by a single parent at a time!")
+
+        return data
 
     @classmethod
     def get_children(cls, parent_id, parent_type):

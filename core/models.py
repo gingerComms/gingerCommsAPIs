@@ -19,9 +19,10 @@ class TeamOwnsTemplate(Edge):
     properties = {}
 
     @classmethod
-    def custom_validation(cls, data, outv_id=None, inv_id=None):
-        """ Provides validation to confirm that a template is only ever
-            owned by one team at a time
+    def custom_validation(cls, data, outv_id=None, inv_id=None,
+                          outv_label=None, inv_label=None):
+        """ Provides validation to confirm that:
+            1) A template is only ever owned by one team at a time
         """
         existing_edge_q = f"g.V().has('{cls.INV_LABEL}', 'id', '{inv_id}')" + \
             f".inE('owns')"
@@ -80,7 +81,8 @@ class CoreVertexInheritsFromTemplate(Edge):
     properties = {}
 
     @classmethod
-    def custom_validation(cls, data, outv_id=None, inv_id=None):
+    def custom_validation(cls, data, outv_id=None, inv_id=None,
+                          outv_label=None, inv_label=None):
         """ Provides custom validation to confirm that:
             1) A Core Vertex only inherits from one template at a time and
             2) Core Vertex only inherits froom a template owned by the vertex's
@@ -291,22 +293,38 @@ class CoreVertexOwnership(Edge):
         True
     """
     LABEL = "owns"
-    # This can be overridden during init (team | coreVertex)
+    # This can be overridden during create (team | coreVertex)
     OUTV_LABEL = "team"
     INV_LABEL = CoreVertex.LABEL
     properties = {}
 
     @classmethod
-    def custom_validation(cls, data, outv_id=None, inv_id=None):
-        """ Provides validation to confirm that a coreVertex is only ever owned
-            by one team/coreVertex at a time
+    def custom_validation(cls, data, outv_id=None, inv_id=None,
+                          outv_label=None, inv_label=None):
+        """ Provides validation to confirm that
+            1) A coreVertex is only ever owned by one team/coreVertex at a time
+            2) A coreVertex can only be owned by a coreVertex whose Template
+                 has the canHaveChildren property set to True
         """
-        existing_edge_q = f"g.V().has('{cls.INV_LABEL}', 'id', '{inv_id}')" + \
+        existing_edge_q = f"g.V().has('{inv_label}', 'id', '{inv_id}')" + \
             f".inE('owns')"
         existing_edge = client.submit(existing_edge_q).all().result()
         if existing_edge:
             raise CustomValidationFailedException(
                 "CoreVertex can only be owned by a single parent at a time!")
+
+        # Checking for the template's canHaveChildren property if the
+        # parent is a coreVertex
+        if outv_label == "coreVertex":
+            parent_template_query = \
+                f"g.V().has('{outv_label}', 'id', '{outv_id}')" + \
+                f".out('inheritsFrom')"
+            parent_template = Template.vertex_to_instance(
+                client.submit(parent_template_query).all().result()[0])
+            if parent_template.canHaveChildren != "True":
+                raise CustomValidationFailedException(
+                    "CoreVertex can only be owned by a CoreVertex that has"
+                    " it's template's canHaveChildren property set to `true`!")
 
         return data
 

@@ -144,8 +144,6 @@ class Vertex(PropertyValidationMixin):
             NOTE 2: This method DOES NOT update the instance in place!
         """
         assert "id" not in validated_data, "Can not update Vertex ID!"
-
-        vertex_id = vertex_id or getattr(self, "id", None)
         assert vertex_id, "No vertex identifier provided!"
 
         query = f"g.V().has('{cls.LABEL}', 'id', '{vertex_id}')"
@@ -182,7 +180,6 @@ class Edge(PropertyValidationMixin):
         """ Receives a Gremlin Edge response as input and generates an Edge
             Instance based off of it
         """
-        #raise ValueError(edge.keys())
         instance = cls(inv_label=cls.INV_LABEL)
         instance.id = edge["id"]
         instance.outV, instance.inV = edge.get("outV"), edge.get("inV")
@@ -192,11 +189,22 @@ class Edge(PropertyValidationMixin):
         return instance
 
     @classmethod
-    def custom_validation(self, data, outv_id=None, inv_id=None):
+    def custom_validation(self, data, outv_id=None, inv_id=None,
+                          outv_label=None, inv_label=None):
         """ A Validation method meant to be overridden by specific edge Models
             and all Edge-specific validation should go in here
         """
         return data
+
+    @classmethod
+    def generate_create_query(cls, outv_label=None, inv_label=None,
+                              outv_id=None, inv_id=None):
+        """ Returns a formatted Gremlin Query string that can be used
+            as a base for an edge Create query (before adding properties)
+        """
+        return f"g.V().has('{outv_label}', 'id', '{outv_id}')" + \
+            f".addE('{cls.LABEL}')" + \
+            f".to(g.V().has('{inv_label}', 'id', '{inv_id}'))"
 
     @classmethod
     def create(cls,
@@ -218,11 +226,13 @@ class Edge(PropertyValidationMixin):
 
         validated_data = cls.validate_input(data)
         validated_data = cls.custom_validation(
-            validated_data, outv_id=out_v, inv_id=in_v)
+            validated_data, outv_id=out_v, inv_id=in_v,
+            outv_label=OUTV_LABEL, inv_label=INV_LABEL)
 
-        query = f"g.V().has('{OUTV_LABEL}', 'id', '{out_v}')" + \
-            f".addE('{cls.LABEL}')" + \
-            f".to(g.V().has('{INV_LABEL}', 'id', '{in_v}'))"
+        query = cls.generate_create_query(
+            outv_label=OUTV_LABEL, inv_label=INV_LABEL,
+            outv_id=out_v, inv_id=in_v
+        )
 
         for key, value in validated_data.items():
             query += f".property('{key}', '{value}')"

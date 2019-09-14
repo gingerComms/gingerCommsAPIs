@@ -20,7 +20,8 @@ class UserHoldsAccount(Edge):
     }
 
     @classmethod
-    def custom_validation(cls, data, outv_id=None, inv_id=None):
+    def custom_validation(cls, data, outv_id=None, inv_id=None,
+                          outv_label=None, inv_label=None):
         """ Provides custom validation before creation that verifies that
             1) The User doesn't already hold the account in some form, and;
             2) The Account targeted doesn't already have a primary holder
@@ -62,7 +63,8 @@ class AccountOwnsTeam(Edge):
     properties = {}
 
     @classmethod
-    def custom_validation(cls, data, outv_id=None, inv_id=None):
+    def custom_validation(cls, data, outv_id=None, inv_id=None,
+                          outv_label=None, inv_label=None):
         """ Provides custom validation to confirm that:
             1) This team (inv) isn't already owned by another team
         """
@@ -99,7 +101,7 @@ class UserAssignedToCoreVertex(Edge):
     """
     LABEL = "assignedTo"
     OUTV_LABEL = "user"
-    # This could be overridden during init (team | coreVertex)
+    # This could be overridden during create (team | coreVertex)
     INV_LABEL = "team"
     # Could be a choice between: ["team_lead", "team_admin", "team_member"]
     # for teams, and: ["cv_lead", "cv_admin", "cv_member"] for core_vertices

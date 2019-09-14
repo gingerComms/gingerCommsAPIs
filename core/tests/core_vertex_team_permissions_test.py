@@ -23,9 +23,9 @@ class CoreVertexTeamPermissionsTestCase(FlaskTestCase):
         self.user = User.create(**self.test_user_details)
         self.url = f"/coreVertex/{self.core_vertex.id}"
 
-    def test_admin_or_lead_can_read_core_vertex(self):
+    def test_team_admin_or_lead_can_read_core_vertex(self):
         """ Asserts that a user with a team-lead/admin role can read a
-            CV through the detail and list endpoints
+            CV through the detail endpoint
         """
         token = create_access_token(self.user)
 
@@ -41,10 +41,42 @@ class CoreVertexTeamPermissionsTestCase(FlaskTestCase):
         self.assertEqual(r.status_code, 403)
 
         # Success case - authorized with team-admin to team
-        admin_edge = UserAssignedToCoreVertex.create(
-            team=self.team.id, user=self.user.id, role="team_admin")
+        lead_edge = UserAssignedToCoreVertex.create(
+            team=self.team.id, user=self.user.id, role="team_lead")
         r = self.client.get(
             self.url,
             headers=self.generate_headers(token)
         )
         self.assertEqual(r.status_code, 200)
+
+    def test_team_admin_can_update_core_vertex(self):
+        """ Asserts that a team admin can update a CV through the update
+            endpoint
+        """
+        token = create_access_token(self.user)
+        headers = self.generate_headers(token)
+
+        # Failure case - unauthorized
+        r = self.client.patch(
+            self.url,
+            json={"title": "RenamedCV"},
+        )
+        self.assertEqual(r.status_code, 401)
+
+        # Failure case - authorized but missing edge
+        r = self.client.patch(
+            self.url,
+            json={"title": "RenamedCV"},
+            headers=self.generate_headers(token)
+        )
+        self.assertEqual(r.status_code, 403)
+
+        # Success case - authorized with team-admin edge
+        admin_edge = UserAssignedToCoreVertex.create(
+            team=self.team.id, user=self.user.id, role="team_admin")
+        r = self.client.patch(
+            self.url,
+            json={"title": "RenamedCV"},
+            headers=self.generate_headers(token)
+        )
+        self.assertEqual(r.status_code, 200, r.status_code)

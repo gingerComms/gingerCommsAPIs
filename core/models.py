@@ -281,8 +281,9 @@ class TemplateHasProperty(Edge):
             in a single query
         """
         query_suffix = f".has('{Template.LABEL}', 'id', '{template_id}')" + \
-            f".as('template').out('{cls.LABEL}').as('property')" + \
-            f".select('template', 'property')"
+            f".as('template').aggregate('template')" + \
+            f".out('{cls.LABEL}').as('property').aggregate('property')" + \
+            f".cap('template', 'property')"
 
         query = f"g.V()"
         if parent_team_id is not None:
@@ -294,9 +295,11 @@ class TemplateHasProperty(Edge):
         if not res:
             return None
 
-        template = Template.vertex_to_instance(res[0]["template"])
+        template = Template.vertex_to_instance(res[0]["template"][0])
+        # [TODO] This needs to be tested
         template.properties = [
-            TemplateProperty.vertex_to_instance(i["property"]) for i in res]
+            TemplateProperty.vertex_to_instance(i["property"]) for i in res
+            if i["property"]]
 
         return template
 

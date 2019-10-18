@@ -277,7 +277,7 @@ core_app.add_url_rule("/team/<vertex_id>/templates",
                       .as_view("list_create_templates"))
 
 
-class RetrieveUpdateTemplatesView(RetrieveUpdateAPIView):
+class RetrieveUpdateDeleteTemplatesView(RetrieveUpdateAPIView, DeleteVertexMixin):
     """ Container for the DETAIL and UPDATE (full/partial) endpoints
         for Templates
     """
@@ -323,9 +323,17 @@ class RetrieveUpdateTemplatesView(RetrieveUpdateAPIView):
         """ Full Update endpoint for Templates """
         return self.update(partial=True)
 
-core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>/",
-                      view_func=RetrieveUpdateTemplatesView
-                      .as_view("retrieve_update_templates"))
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_admin"])
+    def delete(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Deletes the given template id """
+        return super().delete()
+
+core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>",
+                      view_func=RetrieveUpdateDeleteTemplatesView
+                      .as_view("retrieve_update_delete_templates"))
 
 
 class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
@@ -381,7 +389,7 @@ class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
         overwrite_vertex_type="team",
         direct_allowed_roles=["team_admin"])
     def delete(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
-        """ Returns the object identified by the given vertex id """
+        """ Deletes the team identified by the given vertex id """
         return super().delete()
 
 core_app.add_url_rule("/team/<vertex_id>",

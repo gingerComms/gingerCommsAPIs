@@ -139,6 +139,21 @@ class Team(Vertex):
         return auth.UserAssignedToCoreVertex.edge_to_instance(result[0]).role \
             if result else None
 
+    def get_members(self):
+        """ Returns a list of members (id, email, avatarLink) that
+            are assigned to this team
+        """
+        query = f"g.V().has('{self.LABEL}', 'id', '{self.id}')" + \
+            f".inE('{auth.UserAssignedToCoreVertex.LABEL}').outV()"
+        result = client.submit(query).all().result()
+
+        members = [auth.User.vertex_to_instance(i) for i in result]
+        return [{
+            "id": member.id,
+            "email": member.email,
+            "avatarLink": "",  # [TODO]
+        } for member in members]
+
 
 class CoreVertex(Vertex):
     """ Represents a CoreVertex instance that is based off of (inherits from)

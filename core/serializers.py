@@ -6,6 +6,25 @@ import json
 class TeamSchema(Schema):
     """ Schema for the basic Team Vertex and it's endpoints """
     name = fields.Str(required=True)
+    id = fields.Str(dumps_only=True)
+
+
+class TeamsListSchema(Schema):
+    """ Schema used for the TeamsList endpoint """
+    name = fields.Str(required=True)
+    id = fields.Str(required=True)
+    members = fields.Method("get_members")
+
+    def get_members(self, obj):
+        """ All members with access to the Team [TODO] """
+        return []
+
+    def get_stats(self, obj):
+        """ Total number of coreVertices that have this team as
+            the root and the total number of templates owned
+            by this team
+        """
+
 
 
 class CoreVertexListSchema(Schema):

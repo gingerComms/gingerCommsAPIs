@@ -46,6 +46,7 @@ def core_vertex_permission_decorator_factory(overwrite_vertex_type=None,
             if vertex_type == "team":
                 vertex_role = vertex.get_user_permissions(current_user)
                 matched_role = vertex_role in direct_allowed_roles
+                print("ROLE!", vertex_role)
                 if not matched_role:
                     return flask.abort(make_response(
                         jsonify({"error": "User lacks required role."}), 403))

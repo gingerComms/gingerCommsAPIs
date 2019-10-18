@@ -21,6 +21,7 @@ class AccountDetailSchema(Schema):
     """ Detail schema for Account instances with an additional list
         of users
     """
+    id = fields.Str(required=False)
     title = fields.Str(required=True)
     users = fields.Method("get_account_users")
 
@@ -34,3 +35,9 @@ class AccountDetailSchema(Schema):
         data = UserListSchema(many=True).dumps(users)
         data = json.loads(data.data)
         return data
+
+
+class AccountsListSchema(Schema):
+    """ List schema for account instances with only the required details """
+    title = fields.Str(required=True)
+    id = fields.Str(required=False)

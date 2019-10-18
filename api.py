@@ -2,11 +2,15 @@ from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
 from flask_caching import Cache
+from flask_cors import CORS
 from settings import *
 
 
 app = Flask(__name__)
 app.config['JWT_SECRET_KEY'] = SECRET_KEY
+
+# Implements CORS headers
+CORS(app)
 
 # Registering the sub-modules
 from auth.views import auth_app

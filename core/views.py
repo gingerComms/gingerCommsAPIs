@@ -7,12 +7,14 @@ from . import permissions
 from auth import permissions as auth_permissions
 from utils.metaclasses import *
 from utils.generic_views import RetrieveUpdateAPIView
+from utils.mixins import DeleteVertexMixin
 from flask_jwt_extended import (
     jwt_required, get_jwt_identity
 )
 from utils.general_utils import *
 import json
 from flask_caching import Cache
+from db.engine import client
 
 
 core_app = Blueprint("core", __name__)
@@ -27,11 +29,45 @@ class ListCreateTeamsView(MethodView):
     def get(self, account=None, user=None, account_id=None):
         """ A GET endpoint that returns all of the teams connected to this
             account
+            NOTE [TODO]: This needs to be tested further with
+                templates/topics created
         """
-        teams = auth.AccountOwnsTeam.get_teams(account.id)
+        query = f"g.V().hasLabel('{Team.LABEL}')" + \
+            f".inE('{auth.UserAssignedToCoreVertex.LABEL}').outV()" + \
+            f".as('member')" + \
+            f".out('{auth.UserAssignedToCoreVertex.LABEL}')" + \
+            f".project('templatesCount', 'name', 'id', 'member', 'topicsCount')" + \
+            f".by(outE('{TeamOwnsTemplate.LABEL}').inV()" + \
+            f".hasLabel('{Template.LABEL}').count())" + \
+            f".by(values('name'))" + \
+            f".by(values('id'))" + \
+            f".by(select('member'))" + \
+            f".by(outE('{TeamOwnsTemplate.LABEL}').inV()" + \
+            f".hasLabel('{Template.LABEL}')" + \
+            f".inE('{CoreVertexInheritsFromTemplate.LABEL}').count())"
+        result = client.submit(query).all().result()
 
-        schema = TeamSchema(many=True)
-        return jsonify_response(schema.dumps(teams).data, 200)
+        # Map of id:team_data for all teams under account;
+        # Used to collect members while keeping unique teams
+        teams = {}
+        for team in result:
+            if team["id"] not in teams:
+                teams[team["id"]] = {
+                    "id": team["id"],
+                    "name": team["name"],
+                    "templatesCount": team["templatesCount"],
+                    "topicsCount": team["topicsCount"],
+                    "members": []
+                }
+            member = {
+                "id": team["member"]["id"],
+                "email": team["member"]["properties"]["email"][0]["value"],
+                "avatarLink": ""  # [TODO]
+            }
+            if member not in teams[team["id"]]["members"]:
+                teams[team["id"]]["members"].append(member)
+
+        return jsonify_response(list(teams.values()), 200)
 
     @jwt_required
     @auth_permissions.account_held_by_user
@@ -47,11 +83,21 @@ class ListCreateTeamsView(MethodView):
         team = Team.create(**data.data)
         account_edge = auth.AccountOwnsTeam.create(account=account.id, team=team.id)
         user_edge = auth.UserAssignedToCoreVertex.create(
-            user=user.id, team=team.id, role="admin")
+            user=user.id, team=team.id, role="team_admin")
+
+        # Note: We can just return the logged in user as the only member
+        # since there will only be one member upon team creation
 
         return jsonify_response({
             "name": team.name,
-            "id": team.id
+            "id": team.id,
+            "members": [{
+                "id": user.id,
+                "email": user.email,
+                "avatarLink": ""  # [TODO]
+            }],
+            "templatesCount": 0,
+            "topicsCount": 0
         }, 201)
 
 core_app.add_url_rule("/account/<account_id>/teams",
@@ -187,12 +233,15 @@ class ListCreateTemplatesView(MethodView):
         if not vertex:
             return jsonify_response({"error": "Vertex not found"}, 404)
 
-        templates = TeamOwnsTemplate.all_team_templates(vertex.id)
+        query = f"g.V().has('{Team.LABEL}', 'id', '{vertex.id}')" + \
+            f".out('{TeamOwnsTemplate.LABEL}').hasLabel('{Template.LABEL}')" + \
+            f".project('id', 'name', 'topicsCount')" + \
+            f".by(values('id')).by(values('name'))" + \
+            f".by(inE('{CoreVertexInheritsFromTemplate.LABEL}').outV()" + \
+            f".hasLabel('{CoreVertex.LABEL}').count())"
+        result = client.submit(query).all().result()
 
-        schema = TemplateSchema(many=True)
-        response = json.loads(schema.dumps(templates).data)
-
-        return jsonify_response(response, 200)
+        return jsonify_response(result, 200)
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
@@ -216,6 +265,10 @@ class ListCreateTemplatesView(MethodView):
 
         schema = TemplateSchema()
         response = json.loads(schema.dumps(template).data)
+
+        # Adding the topics count field as 0 since a new template
+        # won't have any topics inheriting from it anyways
+        response["topicsCount"] = 0
 
         return jsonify_response(response, 201)
 
@@ -248,21 +301,24 @@ class RetrieveUpdateTemplatesView(RetrieveUpdateAPIView):
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="team")
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_member", "team_lead", "team_admin"])
     def get(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
         """ Returns the object identified by the given vertex id """
         return super().get()
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="team")
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
     def put(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
         """ Full Update endpoint for Templates """
         return self.update()
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="team")
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
     def patch(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
         """ Full Update endpoint for Templates """
         return self.update(partial=True)
@@ -270,6 +326,67 @@ class RetrieveUpdateTemplatesView(RetrieveUpdateAPIView):
 core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>/",
                       view_func=RetrieveUpdateTemplatesView
                       .as_view("retrieve_update_templates"))
+
+
+class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
+    """ Endpoint which implements the following for teams:
+        - GET Detail
+        - Update (PUT/PATCH)
+        - Delete
+    """
+    serializer_class = TeamSchema
+    vertex_class = Team
+
+    def get_object(self):
+        """ Uses the vertex_attribute added to the View to get the
+            template
+        """
+        teams = Team.filter(id=request.view_args["vertex_id"])
+        if teams:
+            return teams[0]
+        return None
+
+    def get_vertex_id(self):
+        """ Returns the template-id from the parsed url; used in the
+            Update mixin
+        """
+        return request.view_args["vertex_id"]
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_member", "team_lead", "team_admin"])
+    def get(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Returns the object identified by the given vertex id """
+        return super().get()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
+    def put(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Full Update endpoint for Templates """
+        return self.update()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
+    def patch(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Full Update endpoint for Templates """
+        return self.update(partial=True)
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_admin"])
+    def delete(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Returns the object identified by the given vertex id """
+        return super().delete()
+
+core_app.add_url_rule("/team/<vertex_id>",
+                      view_func=RetrieveUpdateDeleteTeamsView
+                      .as_view("retrieve_update_delete_teams"))
 
 
 # [TODO]

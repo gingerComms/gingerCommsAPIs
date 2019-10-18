@@ -57,3 +57,31 @@ class UpdateVertexMixin:
             return jsonify_response({"error": "Vertex not found!"}, 404)
 
         return jsonify_response(json.loads(schema.dumps(vertex).data), 200)
+
+
+class DeleteVertexMixin:
+    """ Mixin that implements a "delete" method that can be used in MethodViews
+        for deleting vertices.
+        Note that deleting a vertex through this mixin will automatically
+        delete all of it's edges to prevent having any stray edges
+    """
+    def delete(self):
+        """ Uses the `get_object()` method to find the target vertex, and
+            delete the vertex along with all of it's in and out edges
+        """
+        if not self.serializer_class:
+            raise ValueError("The `serializer_class` attribute must be set")
+
+        if not self.vertex_class:
+            raise ValueError("The `vertex_class` attribute must be set")
+
+        instance = self.get_object()
+        if not instance:
+            return jsonify_response({
+                "error": "Instance not found"
+            }, 404)
+        instance.delete()
+
+        return jsonify_response({
+            "status": "Vertex Deleted"
+        }, 200)

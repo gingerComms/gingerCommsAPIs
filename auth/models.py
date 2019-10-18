@@ -161,13 +161,19 @@ class User(Vertex):
         "password": str  # This should be a string hashed using bcrypt
     }
 
-    def get_held_accounts(self):
-        """ Returns all accounts "held by" (edge) this user """
+    def get_held_accounts(self, initialize_models=False):
+        """ Returns all accounts "held by" (edge) this user
+            If the `initialize_models` arg is True, the vertexes are converted
+            into Account models before being returned; otherwise they're
+            returned as IDs
+        """
         user_accounts_q = f"g.V().hasLabel('{self.LABEL}')" + \
                            f".has('id', '{self.id}')" + \
                            f".out('{UserHoldsAccount.LABEL}')" + \
                            f".hasLabel('{Account.LABEL}')"
         user_accounts = client.submit(user_accounts_q).all().result()
-        user_accounts = [i["id"] for i in user_accounts]
 
-        return user_accounts
+        if initialize_models:
+            return [Account.vertex_to_instance(i) for i in user_accounts]
+        else:
+            return [i["id"] for i in user_accounts]

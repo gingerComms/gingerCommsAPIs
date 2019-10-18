@@ -20,7 +20,7 @@ class AccountCreationTestCase(FlaskTestCase):
             variables that remain the same for all of the test cases
         """
         super().setUp()
-        self.url = "/auth/create_account"
+        self.url = "/auth/accounts/"
 
         self.account_details = {
             "title": "TestAccount"
@@ -33,6 +33,24 @@ class AccountCreationTestCase(FlaskTestCase):
             "password": "Test",
             "fullName": "Test 2"
         })
+
+    def test_account_list(self):
+        """ Tests the LIST GET API for Accounts """
+        token = create_access_token(identity=self.user)
+
+        account = Account.create(**self.account_details)
+        account_edge = UserHoldsAccount.create(
+            user=self.user.id, account=account.id, relationType="secondary")
+
+        r = self.client.get(
+            self.url,
+            headers=self.generate_headers(token)
+        )
+        
+        raise ValueError(r.json)
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.json), 1)
 
     def test_successful_account_creation(self):
         """ Tests that the Account creation API can successfully create

@@ -50,7 +50,7 @@ def register():
                                    relationType="primary")
 
     response = {
-        "user": schema.dumps(user).data,
+        "user": json.loads(schema.dumps(user).data),
         "token": create_access_token(identity=user)
     }
 
@@ -67,7 +67,7 @@ def login():
 
     user = User.filter(username=username)
     if not user:
-        return jsonify_response({"User doesn't exist!"}, 404)
+        return jsonify_response({"status": "User doesn't exist!"}, 404)
     user = user[0]
 
     if not check_password_hash(user.password.encode("utf-8"), password):
@@ -119,6 +119,62 @@ def create_account():
         "title": account.title
     }
     return jsonify_response(response, 201)
+
+
+class ListCreateAccountsView(MethodView):
+    """ Implements a LIST GET API for accounts """
+
+    @jwt_required
+    def get(self):
+        """ Returns a serialized list of accounts that the authenticated
+            user has access to
+        """
+        user_id = get_jwt_identity()
+        user = User.filter(id=user_id)[0]
+        held_accounts = user.get_held_accounts(initialize_models=True)
+
+        schema = AccountsListSchema(many=True)
+        response = schema.dumps(held_accounts)
+
+        return jsonify_response(json.loads(response.data), 200)
+
+    @jwt_required
+    def post(self):
+        """ POST endpoint used for creating new secondary Accounts linked
+            to the currently authenticated user
+        """
+        user_id = get_jwt_identity()
+        user = User.filter(id=user_id)[0]
+        data = json.loads(request.data)
+
+        if 'title' not in data:
+            return jsonify_response({"errors": "`title` field is required."}, 400)
+
+        held_accounts = user.get_held_accounts()
+        if held_accounts:
+            user_accounts = ",".join(f"'{i}'" for i in held_accounts)
+            user_account_names_q = \
+                f"g.V().hasLabel('{Account.LABEL}')" + \
+                f".has('id', within({user_accounts}))" + \
+                f".values('title')"
+            user_account_names = client.submit(user_account_names_q).all().result()
+
+            if data["title"] in user_account_names:
+                return jsonify_response(
+                    {"errors": "Account with the given title already exists"},
+                    400)
+
+        account = Account.create(title=data["title"])
+        edge = UserHoldsAccount.create(user=user.id, account=account.id,
+                                       relationType="secondary")
+
+        response = {
+            "title": account.title
+        }
+        return jsonify_response(response, 201)
+auth_app.add_url_rule("/accounts/",
+                      view_func=ListCreateAccountsView.as_view(
+                          "list_create_accounts"))
 
 
 class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):

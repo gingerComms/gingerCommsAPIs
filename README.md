@@ -14,6 +14,15 @@ All of the included unit tests can be run using unittest's discover utility:
 
 ``` python -m unittest discover . "*_test.py" ```
 
+## Running Debug Server
+
+The following can be run from within the main package to start the debug flask server:
+
+```
+set FLASK_APP=api.py # (or export FLASK_APP=api.py for UNIX systems)
+flask run
+```
+
 ## TODO
 
 - [ ] Mixin for generic GET List views that would use a class attribute/function to generate a list of "Vertices" and a serializer attribute and return the serialized data to the user through the "get" endpoint

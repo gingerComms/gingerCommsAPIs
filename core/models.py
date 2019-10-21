@@ -154,6 +154,24 @@ class Team(Vertex):
             "avatarLink": "",  # [TODO]
         } for member in members]
 
+    @classmethod
+    def get_team_details(cls, team_id):
+        """ Returns a Team object containing all of the fields required
+            for the team-details endpoint(s) including:
+                name, id, templates
+            NOTE: This will raise an exception if the ID doesn't exist
+        """
+        query = f"g.V().as('team').has('{cls.LABEL}', 'id', '{team_id}')" + \
+            f".fold().project('team', 'templates').by(unfold())" + \
+            f".by(unfold().out('{TeamOwnsTemplate.LABEL}').fold())"
+        result = client.submit(query).next()[0]
+
+        team = Team.vertex_to_instance(result["team"])
+        team.templates = [
+            Template.vertex_to_instance(i) for i in result["templates"]]
+
+        return team
+
 
 class CoreVertex(Vertex):
     """ Represents a CoreVertex instance that is based off of (inherits from)
@@ -255,6 +273,33 @@ class Template(Vertex):
 
         return template
 
+    @classmethod
+    def get_template_with_properties(cls, template_id, parent_team_id=None):
+        """ Returns the template and the template properties belonging to it
+            in a single query
+        """
+        query = "g.V()"
+        # Prepending a team query if the team id arg is provided
+        if parent_team_id:
+            query += f".has('{Team.LABEL}', 'id', " + \
+                f"'{parent_team_id}').out('{TeamOwnsTemplate.LABEL}')"
+        query += f".has('{Template.LABEL}', 'id', '{template_id}')" + \
+            f".fold().project('template', 'properties').by(unfold())" + \
+            f".by(unfold().out('{TemplateHasProperty.LABEL}').fold())"
+
+        try:
+            # This raises a 597 error if there's nothing found
+            res = client.submit(query).all().result()
+        except:
+            return None
+
+        template = Template.vertex_to_instance(res[0]["template"])
+        template.properties = [
+            TemplateProperty.vertex_to_instance(i) for i
+            in res[0]["properties"]]
+
+        return template
+
 
 class TemplateHasProperty(Edge):
     """ Represents an outward edge from a Template to a TemplateProperty,
@@ -274,34 +319,6 @@ class TemplateHasProperty(Edge):
         res = client.submit(query).all().result()
 
         return [TemplateProperty.vertex_to_instance(i) for i in res]
-
-    @classmethod
-    def get_template_with_properties(cls, template_id, parent_team_id=None):
-        """ Returns the template and the template properties belonging to it
-            in a single query
-        """
-        query_suffix = f".has('{Template.LABEL}', 'id', '{template_id}')" + \
-            f".as('template').aggregate('template')" + \
-            f".out('{cls.LABEL}').as('property').aggregate('property')" + \
-            f".cap('template', 'property')"
-
-        query = f"g.V()"
-        if parent_team_id is not None:
-            query += f".has('{Team.LABEL}', 'id', '{parent_team_id}')" + \
-                f".out('{TeamOwnsTemplate.LABEL}')"
-
-        res = client.submit(query+query_suffix).all().result()
-
-        if not res:
-            return None
-
-        template = Template.vertex_to_instance(res[0]["template"][0])
-        # [TODO] This needs to be tested
-        template.properties = [
-            TemplateProperty.vertex_to_instance(i["property"]) for i in res
-            if i["property"]]
-
-        return template
 
 
 class CoreVertexOwnership(Edge):

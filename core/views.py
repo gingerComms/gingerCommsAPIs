@@ -263,7 +263,7 @@ class ListCreateTemplatesView(MethodView):
         owns_edge = TeamOwnsTemplate.create(team=vertex.id,
                                             template=template.id)
 
-        schema = TemplateSchema()
+        schema = TemplateDetailSchema()
         response = json.loads(schema.dumps(template).data)
 
         # Adding the topics count field as 0 since a new template
@@ -281,14 +281,14 @@ class RetrieveUpdateDeleteTemplatesView(RetrieveUpdateAPIView, DeleteVertexMixin
     """ Container for the DETAIL and UPDATE (full/partial) endpoints
         for Templates
     """
-    serializer_class = TemplateSchema
+    serializer_class = TemplateDetailSchema
     vertex_class = Template
 
     def get_object(self):
         """ Uses the vertex_attribute added to the View to get the
             template
         """
-        template = TemplateHasProperty.get_template_with_properties(
+        template = Template.get_template_with_properties(
             request.view_args["template_id"], request.view_args["vertex_id"])
 
         return template
@@ -336,29 +336,67 @@ core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>",
                       .as_view("retrieve_update_delete_templates"))
 
 
-class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
-    """ Endpoint which implements the following for teams:
+class CreateTemplatePropertiesView(MethodView):
+    """ Endpoint which implements a Creation POST for properties """
+    serializer_class = TemplatePropertySchema
+    vertex_class = TemplateProperty
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
+    def post(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Creation endpoint for properties """
+        schema = self.serializer_class()
+        data = schema.loads(request.data)
+        if data.errors:
+            return jsonify_response(data.errors, 400)
+
+        template = Template.filter(id=template_id)
+        if not template:
+            return jsonify_response(
+                status={"error": "Template does not exist."})
+        template = template[0]
+
+        template_prop = TemplateProperty.create(**data.data)
+        property_edge = TemplateHasProperty.create(
+            templateProperty=template_prop.id, template=template.id)
+
+        return jsonify_response({
+            "id": template_prop.id,
+            "name": template_prop.name,
+            "fieldType": template_prop.fieldType
+        }, 201)
+
+core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>/properties",
+                      view_func=CreateTemplatePropertiesView
+                      .as_view("create_template_properties"))
+
+
+class RetrieveUpdateDeleteTemplatePropertiesView(
+        RetrieveUpdateAPIView, DeleteVertexMixin):
+    """ Endpoint which implements the following for templateProperties:
         - GET Detail
         - Update (PUT/PATCH)
         - Delete
     """
-    serializer_class = TeamSchema
-    vertex_class = Team
+    serializer_class = TemplatePropertySchema
+    vertex_class = TemplateProperty
 
     def get_object(self):
         """ Uses the vertex_attribute added to the View to get the
-            template
+            templateProperty
         """
-        teams = Team.filter(id=request.view_args["vertex_id"])
-        if teams:
-            return teams[0]
+        template_property = TemplateProperty.filter(id=self.get_vertex_id())
+        if template_property:
+            return template_property[0]
         return None
 
     def get_vertex_id(self):
-        """ Returns the template-id from the parsed url; used in the
+        """ Returns the TempleProperty-id from the parsed url; used in the
             Update mixin
         """
-        return request.view_args["vertex_id"]
+        return request.view_args["property_id"]
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
@@ -373,7 +411,7 @@ class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
         overwrite_vertex_type="team",
         direct_allowed_roles=["team_lead", "team_admin"])
     def put(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
-        """ Full Update endpoint for Templates """
+        """ Full Update endpoint for TempleProperties """
         return self.update()
 
     @jwt_required
@@ -381,7 +419,7 @@ class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
         overwrite_vertex_type="team",
         direct_allowed_roles=["team_lead", "team_admin"])
     def patch(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
-        """ Full Update endpoint for Templates """
+        """ Full Update endpoint for TempleProperties """
         return self.update(partial=True)
 
     @jwt_required
@@ -389,6 +427,68 @@ class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
         overwrite_vertex_type="team",
         direct_allowed_roles=["team_admin"])
     def delete(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Deletes the TempleProperty identified by the given vertex id """
+        return super().delete()
+
+core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>"
+                      "/properties/<property_id>",
+                      view_func=RetrieveUpdateDeleteTemplatePropertiesView
+                      .as_view("retrieve_update_delete_template_properties"))
+
+
+class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
+    """ Endpoint which implements the following for teams:
+        - GET Detail
+        - Update (PUT/PATCH)
+        - Delete
+    """
+    serializer_class = TeamsDetailSchema
+    vertex_class = Team
+
+    def get_object(self):
+        """ Uses the vertex_attribute added to the View to get the
+            team
+        """
+        teams = Team.filter(id=request.view_args["vertex_id"])
+        if teams:
+            return teams[0].get_team_details(teams[0].id)
+        return None
+
+    def get_vertex_id(self):
+        """ Returns the team-id from the parsed url; used in the
+            Update mixin
+        """
+        return request.view_args["vertex_id"]
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_member", "team_lead", "team_admin"])
+    def get(self, vertex=None, vertex_id=None, **kwargs):
+        """ Returns the object identified by the given vertex id """
+        return super().get()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
+    def put(self, vertex=None, vertex_id=None, **kwargs):
+        """ Full Update endpoint for team """
+        return self.update()
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
+    def patch(self, vertex=None, vertex_id=None, **kwargs):
+        """ Full Update endpoint for team """
+        return self.update(partial=True)
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_admin"])
+    def delete(self, vertex=None, vertex_id=None, **kwargs):
         """ Deletes the team identified by the given vertex id """
         return super().delete()
 

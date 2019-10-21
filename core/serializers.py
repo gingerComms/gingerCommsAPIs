@@ -3,38 +3,6 @@ from .models import TemplateHasProperty
 import json
 
 
-class TeamSchema(Schema):
-    """ Schema for the basic Team Vertex and it's endpoints """
-    name = fields.Str(required=True)
-    id = fields.Str(dumps_only=True)
-
-
-class TeamsListSchema(Schema):
-    """ Schema used for the TeamsList endpoint """
-    name = fields.Str(required=True)
-    id = fields.Str(required=True)
-    members = fields.Method("get_members")
-
-    def get_members(self, obj):
-        """ All members with access to the Team [TODO] """
-        return []
-
-    def get_stats(self, obj):
-        """ Total number of coreVertices that have this team as
-            the root and the total number of templates owned
-            by this team
-        """
-
-
-
-class CoreVertexListSchema(Schema):
-    """ Schema used for CoreVertex List endpoints; contains only the
-        minimal details
-    """
-    id = fields.Str(dumps_only=True)
-    title = fields.Str(required=True)
-
-
 class TemplatePropertySchema(Schema):
     """ Schema for TemplateProperties """
     id = fields.Str(dumps_only=True)
@@ -42,12 +10,12 @@ class TemplatePropertySchema(Schema):
     fieldType = fields.Str(required=True)
 
 
-class TemplateSchema(Schema):
+class TemplateDetailSchema(Schema):
     """ Schema for the Template including all of it's properties [TODO] """
     id = fields.Str(dumps_only=True)
     name = fields.Str(required=True)
-    canHaveChildren = fields.Bool(required=True)
-    properties = fields.Method("get_template_properties")
+    canHaveChildren = fields.Bool(dumps_only=True)
+    properties = fields.Method("get_template_properties", dumps_only=True)
 
     def get_template_properties(self, obj):
         """ Uses the template methods to get a serialized list of
@@ -69,6 +37,40 @@ class TemplateSchema(Schema):
 
         if errors:
             raise ValidationError(errors)
+
+
+class TemplateListSchema(Schema):
+    """ Schema used for the templates list endpoinnts """
+    id = fields.Str(dumps_only=True)
+    name = fields.Str(required=True)
+    canHaveChildren = fields.Bool(required=True)
+
+
+class TeamSchema(Schema):
+    """ Schema for the basic Team Vertex and it's endpoints """
+    name = fields.Str(required=True)
+    id = fields.Str(dumps_only=True)
+
+
+class TeamsListSchema(Schema):
+    """ Schema used for the TeamsList endpoint """
+    name = fields.Str(required=True)
+    id = fields.Str(dumps_only=True)
+
+
+class TeamsDetailSchema(Schema):
+    """ Schema used for the TeamsDetail endpoints """
+    name = fields.Str(required=True)
+    id = fields.Str(dumps_only=True)
+    templates = fields.Nested(TemplateListSchema, many=True, dumps_only=True)
+
+
+class CoreVertexListSchema(Schema):
+    """ Schema used for CoreVertex List endpoints; contains only the
+        minimal details
+    """
+    id = fields.Str(dumps_only=True)
+    title = fields.Str(required=True)
 
 
 class CoreVertexDetailSchema(Schema):

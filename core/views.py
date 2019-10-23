@@ -109,15 +109,18 @@ class ListCreateCoreVertexView(MethodView):
         children CoreVertices in a given Team or CoreVertex
     """
     @jwt_required
-    @permissions.core_vertex_permission_decorator_factory()
-    def get(self, vertex=None, vertex_type=None, vertex_id=None):
+    @permissions.core_vertex_permission_decorator_factory(
+        direct_allowed_roles=["team_admin", "team_lead", "topic_member"])
+    def get(self, vertex=None, vertex_type=None,
+            vertex_id=None, template_id=None):
         """ Returns all direct coreVertices under the given parent's
             identifier
         """
         if not vertex:
             return jsonify_response({"error": "Vertex not found"}, 404) 
 
-        children = CoreVertexOwnership.get_children(vertex_id, vertex_type)
+        children = CoreVertexOwnership.get_children(
+            vertex_id, vertex_type, template_id=template_id)
 
         schema = CoreVertexListSchema(many=True)
         response = json.loads(schema.dumps(children).data)
@@ -125,8 +128,10 @@ class ListCreateCoreVertexView(MethodView):
         return jsonify_response(response, 200)
 
     @jwt_required
-    @permissions.core_vertex_permission_decorator_factory()
-    def post(self, vertex=None, vertex_type=None, vertex_id=None):
+    @permissions.core_vertex_permission_decorator_factory(
+        direct_allowed_roles=["team_admin", "team_lead"])
+    def post(self, vertex=None, vertex_type=None,
+             vertex_id=None, template_id=None):
         """ Creates the core vertex instance of the given type as well as
             and edge from the parent to the created vertex
         """
@@ -136,23 +141,24 @@ class ListCreateCoreVertexView(MethodView):
         data = json.loads(request.data)
 
         # Confirming the request data schema
-        if "title" not in data or "template" not in data:
+        if "title" not in data or "templateData" not in data:
             return jsonify_response({"error": "Incorrect Schema"}, 400)
 
         # Confirming that the required template exists on the ROOT of the vertex
         # tree
         template = TeamOwnsTemplate.get_template(
-            vertex_type, vertex.id, data["template"])
+            vertex_type, vertex.id, template_id)
         if not template:
             return jsonify_response(
                 {"error": "Template doesn't exist"}, 404)
 
-        core_vertex = CoreVertex.create(title=data["title"], templateData="{}")
-        template_edge = CoreVertexInheritsFromTemplate.create(
-            coreVertex=core_vertex.id, template=template.id)
+        core_vertex = CoreVertex.create(
+            title=data["title"], templateData=data["templateData"])
         child_edge = CoreVertexOwnership.create(
             outv_id=vertex_id, inv_id=core_vertex.id,
             inv_label="coreVertex", outv_label=vertex_type)
+        template_edge = CoreVertexInheritsFromTemplate.create(
+            coreVertex=core_vertex.id, template=template.id)
 
         response = {
             "id": core_vertex.id,
@@ -166,12 +172,12 @@ class ListCreateCoreVertexView(MethodView):
         }
         return jsonify_response(response, 201)
 
-core_app.add_url_rule("/<vertex_type>/<vertex_id>/children/",
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/templates/<template_id>/nodes/",
                       view_func=ListCreateCoreVertexView
                       .as_view("list_create_core_vertices"))
 
 
-class RetrieveUpdateCoreVertexView(RetrieveUpdateAPIView):
+class RetrieveUpdateDeleteCoreVertexView(RetrieveUpdateAPIView, DeleteVertexMixin):
     """ Container for the DETAIL and UPDATE (full/partial) endpoints
         for CoreVertices;
     """
@@ -215,8 +221,18 @@ class RetrieveUpdateCoreVertexView(RetrieveUpdateAPIView):
         """ Full Update endpoint for coreVertices """
         return self.update(partial=True)
 
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="coreVertex",
+        direct_allowed_roles=[],  # TODO: Add roles here
+        indirect_allowed_roles=["team_admin"])
+    def delete(self, vertex=None, vertex_id=None, **kwargs):
+        """ Deletes the coreVertex identified by the given vertex id """
+        self.get_object = lambda: vertex
+        return super().delete()
+
 core_app.add_url_rule("/coreVertex/<vertex_id>",
-                      view_func=RetrieveUpdateCoreVertexView
+                      view_func=RetrieveUpdateDeleteCoreVertexView
                       .as_view("retrieve_update_core_vertices"))
 
 
@@ -365,7 +381,8 @@ class CreateTemplatePropertiesView(MethodView):
         return jsonify_response({
             "id": template_prop.id,
             "name": template_prop.name,
-            "fieldType": template_prop.fieldType
+            "fieldType": template_prop.fieldType,
+            "value": template_prop.value
         }, 201)
 
 core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>/properties",

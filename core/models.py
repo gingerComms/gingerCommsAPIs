@@ -5,6 +5,7 @@ from db.exceptions import (
     ObjectCanNotBeDeletedException
 )
 import auth
+import re
 
 
 class TeamOwnsTemplate(Edge):
@@ -163,7 +164,8 @@ class Team(Vertex):
         """
         query = f"g.V().as('team').has('{cls.LABEL}', 'id', '{team_id}')" + \
             f".fold().project('team', 'templates').by(unfold())" + \
-            f".by(unfold().out('{TeamOwnsTemplate.LABEL}').fold())"
+            f".by(unfold().out('{TeamOwnsTemplate.LABEL}')" + \
+            f".hasLabel('{Template.LABEL}').fold())"
         result = client.submit(query).next()[0]
 
         team = Team.vertex_to_instance(result["team"])
@@ -219,8 +221,18 @@ class TemplateProperty(Vertex):
     LABEL = "templateProperty"
     properties = {
         "name": str,
-        "fieldType": str
+        "fieldType": str,
+        "value": str  # This is a code-friendly name for the property
     }
+
+    @classmethod
+    def create(cls, value=None, **data):
+        """ Valuefies the value to make it code friendly before passing
+            it on to the regular create method
+        """
+        if value:
+            value = re.sub(r"[^a-zA-Z0-9]", "", value)
+        return super().create(value=value, **data)
 
 
 class Template(Vertex):
@@ -353,7 +365,7 @@ class CoreVertexOwnership(Edge):
         if outv_label == "coreVertex":
             parent_template_query = \
                 f"g.V().has('{outv_label}', 'id', '{outv_id}')" + \
-                f".out('inheritsFrom')"
+                f".out('{CoreVertexInheritsFromTemplate.LABEL}')"
             parent_template = Template.vertex_to_instance(
                 client.submit(parent_template_query).all().result()[0])
             if parent_template.canHaveChildren != "True":
@@ -364,12 +376,18 @@ class CoreVertexOwnership(Edge):
         return data
 
     @classmethod
-    def get_children(cls, parent_id, parent_type):
+    def get_children(cls, parent_id, parent_type, template_id=None):
         """ Returns all DIRECT children coreVertices under the given
             parent
         """
         query = f"g.V().has('{parent_type}', 'id', '{parent_id}')" + \
             f".out('{cls.LABEL}').hasLabel('{CoreVertex.LABEL}')"
+
+        if template_id:
+            query += f".as('cv')" + \
+                f".out('{CoreVertexInheritsFromTemplate.LABEL}')" + \
+                f".has('id', '{template_id}').select('cv')"
+
         result = client.submit(query).all().result()
 
         return [CoreVertex.vertex_to_instance(i) for i in result]

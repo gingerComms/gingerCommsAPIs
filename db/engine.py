@@ -268,7 +268,11 @@ class Edge(PropertyValidationMixin):
         return instances
 
     def delete(self):
-        """ Drops this edge through the ID of the initialized instance """
+        """ Drops this edge through the ID of the initialized instance
+            TODO: This currently deletes just the vertex and leaves hanging vertices
+                if there are any edges.
+                Raise an error if vertex as any outgoing edges
+        """
         assert self.id, "Instance has not been initialized!"
 
         query = f"g.E().has('id', '{self.id}').drop()"

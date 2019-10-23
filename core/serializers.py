@@ -8,6 +8,7 @@ class TemplatePropertySchema(Schema):
     id = fields.Str(dumps_only=True)
     name = fields.Str(required=True)
     fieldType = fields.Str(required=True)
+    value = fields.Str(require=True)
 
 
 class TemplateDetailSchema(Schema):
@@ -71,6 +72,7 @@ class CoreVertexListSchema(Schema):
     """
     id = fields.Str(dumps_only=True)
     title = fields.Str(required=True)
+    templateData = fields.Str(required=True)
 
 
 class CoreVertexDetailSchema(Schema):

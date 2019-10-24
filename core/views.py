@@ -382,7 +382,8 @@ class CreateTemplatePropertiesView(MethodView):
             "id": template_prop.id,
             "name": template_prop.name,
             "fieldType": template_prop.fieldType,
-            "value": template_prop.value
+            "value": template_prop.value,
+            "propertyOptions": template_prop.propertyOptions
         }, 201)
 
 core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>/properties",

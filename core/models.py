@@ -222,6 +222,8 @@ class TemplateProperty(Vertex):
     properties = {
         "name": str,
         "fieldType": str,
+        # Contains certain options (list etc.) for the property; JSON str
+        "propertyOptions": str,
         "value": str  # This is a code-friendly name for the property
     }
 

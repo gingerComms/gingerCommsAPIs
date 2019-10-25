@@ -75,7 +75,8 @@ class ListCreateCoreVertexView(MethodView):
     """
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        direct_allowed_roles=["team_admin", "team_lead", "topic_member"])
+        direct_allowed_roles=["team_admin", "team_lead", "topic_member"],  # TODO: Add CV Roles here
+        indirect_allowed_roles=["team_admin", "team_lead", "topic_member"])
     def get(self, vertex=None, vertex_type=None,
             vertex_id=None, template_id=None):
         """ Returns all direct coreVertices under the given parent's
@@ -94,7 +95,8 @@ class ListCreateCoreVertexView(MethodView):
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        direct_allowed_roles=["team_admin", "team_lead"])
+        direct_allowed_roles=["team_admin", "team_lead"],  # TODO: Add CV roles here
+        indirect_allowed_roles=["team_admin", "team_lead"])
     def post(self, vertex=None, vertex_type=None,
              vertex_id=None, template_id=None):
         """ Creates the core vertex instance of the given type as well as
@@ -137,7 +139,7 @@ class ListCreateCoreVertexView(MethodView):
         }
         return jsonify_response(response, 201)
 
-core_app.add_url_rule("/<vertex_type>/<vertex_id>/templates/<template_id>/nodes/",
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/templates/<template_id>/nodes",
                       view_func=ListCreateCoreVertexView
                       .as_view("list_create_core_vertices"))
 

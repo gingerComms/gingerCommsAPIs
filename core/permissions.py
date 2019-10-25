@@ -45,8 +45,6 @@ def core_vertex_permission_decorator_factory(overwrite_vertex_type=None,
             # If this a team vertex, we only need to care about direct roles
             if vertex_type == "team":
                 matched_role = classes[vertex_type].filter(id=vertex_id)[0].get_user_permissions(current_user) in direct_allowed_roles
-                print(classes[vertex_type].filter(id=vertex_id)[0].get_user_permissions(current_user),
-                      current_user, vertex_id)
                 if not matched_role:
                     return flask.abort(make_response(
                         jsonify({"error": "User lacks required role."}), 403))

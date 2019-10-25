@@ -174,6 +174,52 @@ class Team(Vertex):
 
         return team
 
+    @classmethod
+    def get_teams_with_detail(cls, account_id):
+        """ Returns all teams owned by the given account id with its
+            own properties as well as the following details:
+                - templatesCount,
+                - member (array)
+                - topicsCount
+            -- SERIALIZED
+        """ 
+        query = f"g.V().hasLabel('{Team.LABEL}')" + \
+            f".inE('{auth.AccountOwnsTeam.LABEL}').outV()" + \
+            f".has('id', '{account_id}').out('{auth.AccountOwnsTeam.LABEL}')" + \
+            f".inE('{auth.UserAssignedToCoreVertex.LABEL}').outV()" + \
+            f".as('member')" + \
+            f".out('{auth.UserAssignedToCoreVertex.LABEL}')" + \
+            f".project('templatesCount', 'name', 'id', 'member', 'topicsCount')" + \
+            f".by(outE('{TeamOwnsTemplate.LABEL}').inV()" + \
+            f".hasLabel('{Template.LABEL}').count())" + \
+            f".by(values('name'))" + \
+            f".by(values('id'))" + \
+            f".by(select('member'))" + \
+            f".by(outE('{TeamOwnsTemplate.LABEL}').inV()" + \
+            f".hasLabel('{Template.LABEL}')" + \
+            f".inE('{CoreVertexInheritsFromTemplate.LABEL}').count())"
+        result = client.submit(query).all().result()
+
+        teams = {}
+        for team in result:
+            if team["id"] not in teams:
+                teams[team["id"]] = {
+                    "id": team["id"],
+                    "name": team["name"],
+                    "templatesCount": team["templatesCount"],
+                    "topicsCount": team["topicsCount"],
+                    "members": []
+                }
+            member = {
+                "id": team["member"]["id"],
+                "email": team["member"]["properties"]["email"][0]["value"],
+                "avatarLink": ""  # [TODO]
+            }
+            if member not in teams[team["id"]]["members"]:
+                teams[team["id"]]["members"].append(member)
+
+        return list(teams.values())
+
 
 class CoreVertex(Vertex):
     """ Represents a CoreVertex instance that is based off of (inherits from)
@@ -215,6 +261,32 @@ class CoreVertex(Vertex):
 
         return roles
 
+    @classmethod
+    def get_core_vertex_with_template(cls, vertex_id):
+        """ Returns the core vertex details as well as the template
+            with it's properties in another `template` attribute
+            NOTE: Raises an exception if the vertex id isn't valid
+        """
+        query = f"g.V().has('{cls.LABEL}', 'id', '{vertex_id}')" + \
+            f".fold().project('cv', 'template', 'templateProperties')" + \
+            f".by(unfold())" + \
+            f".by(unfold().outE('{CoreVertexInheritsFromTemplate.LABEL}')" + \
+            f".inV().fold())" + \
+            f".by(unfold().outE('{CoreVertexInheritsFromTemplate.LABEL}')" + \
+            f".inV().outE('{TemplateHasProperty.LABEL}')" + \
+            f".inV().fold())"
+
+        result = client.submit(query).all().result()[0]
+
+        core_vertex = cls.vertex_to_instance(result["cv"])
+        core_vertex.template = Template.vertex_to_instance(
+            result["template"][0])
+        core_vertex.template.properties = [
+            Template.vertex_to_instance(i) for i
+            in result["templateProperties"]]
+
+        return core_vertex
+
 
 class TemplateProperty(Vertex):
     """ Represents an input "field" added by a user in a template """
@@ -224,7 +296,6 @@ class TemplateProperty(Vertex):
         "fieldType": str,
         # Contains certain options (list etc.) for the property; JSON str
         "propertyOptions": str,
-        "value": str  # This is a code-friendly name for the property
     }
 
     @classmethod
@@ -313,6 +384,23 @@ class Template(Vertex):
             in res[0]["properties"]]
 
         return template
+
+    @classmethod
+    def get_templates_with_details(cls, team_id):
+        """ Returns the all Template instance owned by the given team
+            with the required details;
+                - id, name, topicsCount
+            -- SERIALIZED
+        """
+        query = f"g.V().has('{Team.LABEL}', 'id', '{team_id}')" + \
+            f".out('{TeamOwnsTemplate.LABEL}').hasLabel('{Template.LABEL}')" + \
+            f".project('id', 'name', 'topicsCount')" + \
+            f".by(values('id')).by(values('name'))" + \
+            f".by(inE('{CoreVertexInheritsFromTemplate.LABEL}').outV()" + \
+            f".hasLabel('{CoreVertex.LABEL}').count())"
+        result = client.submit(query).all().result()
+
+        return result
 
 
 class TemplateHasProperty(Edge):

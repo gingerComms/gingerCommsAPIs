@@ -29,45 +29,10 @@ class ListCreateTeamsView(MethodView):
     def get(self, account=None, user=None, account_id=None):
         """ A GET endpoint that returns all of the teams connected to this
             account
-            NOTE [TODO]: This needs to be tested further with
-                templates/topics created
         """
-        query = f"g.V().hasLabel('{Team.LABEL}')" + \
-            f".inE('{auth.UserAssignedToCoreVertex.LABEL}').outV()" + \
-            f".as('member')" + \
-            f".out('{auth.UserAssignedToCoreVertex.LABEL}')" + \
-            f".project('templatesCount', 'name', 'id', 'member', 'topicsCount')" + \
-            f".by(outE('{TeamOwnsTemplate.LABEL}').inV()" + \
-            f".hasLabel('{Template.LABEL}').count())" + \
-            f".by(values('name'))" + \
-            f".by(values('id'))" + \
-            f".by(select('member'))" + \
-            f".by(outE('{TeamOwnsTemplate.LABEL}').inV()" + \
-            f".hasLabel('{Template.LABEL}')" + \
-            f".inE('{CoreVertexInheritsFromTemplate.LABEL}').count())"
-        result = client.submit(query).all().result()
+        teams = Team.get_teams_with_detail(account_id)
 
-        # Map of id:team_data for all teams under account;
-        # Used to collect members while keeping unique teams
-        teams = {}
-        for team in result:
-            if team["id"] not in teams:
-                teams[team["id"]] = {
-                    "id": team["id"],
-                    "name": team["name"],
-                    "templatesCount": team["templatesCount"],
-                    "topicsCount": team["topicsCount"],
-                    "members": []
-                }
-            member = {
-                "id": team["member"]["id"],
-                "email": team["member"]["properties"]["email"][0]["value"],
-                "avatarLink": ""  # [TODO]
-            }
-            if member not in teams[team["id"]]["members"]:
-                teams[team["id"]]["members"].append(member)
-
-        return jsonify_response(list(teams.values()), 200)
+        return jsonify_response(teams, 200)
 
     @jwt_required
     @auth_permissions.account_held_by_user
@@ -200,7 +165,8 @@ class RetrieveUpdateDeleteCoreVertexView(RetrieveUpdateAPIView, DeleteVertexMixi
             - Overridden to add the decorators, and reuse the Vertex
                 instance injected through the permission
         """
-        self.get_object = lambda: vertex
+        self.get_object = lambda: vertex.get_core_vertex_with_template(
+            vertex.id)
         return super().get()
 
     @jwt_required
@@ -249,13 +215,7 @@ class ListCreateTemplatesView(MethodView):
         if not vertex:
             return jsonify_response({"error": "Vertex not found"}, 404)
 
-        query = f"g.V().has('{Team.LABEL}', 'id', '{vertex.id}')" + \
-            f".out('{TeamOwnsTemplate.LABEL}').hasLabel('{Template.LABEL}')" + \
-            f".project('id', 'name', 'topicsCount')" + \
-            f".by(values('id')).by(values('name'))" + \
-            f".by(inE('{CoreVertexInheritsFromTemplate.LABEL}').outV()" + \
-            f".hasLabel('{CoreVertex.LABEL}').count())"
-        result = client.submit(query).all().result()
+        result = template.get_template_with_details(vertex.id)
 
         return jsonify_response(result, 200)
 
@@ -382,7 +342,6 @@ class CreateTemplatePropertiesView(MethodView):
             "id": template_prop.id,
             "name": template_prop.name,
             "fieldType": template_prop.fieldType,
-            "value": template_prop.value,
             "propertyOptions": template_prop.propertyOptions
         }, 201)
 

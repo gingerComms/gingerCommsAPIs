@@ -120,7 +120,8 @@ class ListCreateCoreVertexView(MethodView):
                 {"error": "Template doesn't exist"}, 404)
 
         core_vertex = CoreVertex.create(
-            title=data["title"], templateData=data["templateData"])
+            title=data["title"], templateData=data["templateData"],
+            content=data["content"])
         child_edge = CoreVertexOwnership.create(
             outv_id=vertex_id, inv_id=core_vertex.id,
             inv_label="coreVertex", outv_label=vertex_type)
@@ -131,6 +132,7 @@ class ListCreateCoreVertexView(MethodView):
             "id": core_vertex.id,
             "title": core_vertex.title,
             "templateData": core_vertex.templateData,
+            "content": core_vertex.content,
             "template": {
                 "id": template.id,
                 "name": template.name,

@@ -228,7 +228,8 @@ class CoreVertex(Vertex):
     LABEL = "coreVertex"
     properties = {
         "title": str,
-        "templateData": str
+        "templateData": str,
+        "content": str  # Text Field that contains formatted text
     }
 
     def get_user_permissions(self, user_id):

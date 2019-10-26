@@ -73,6 +73,7 @@ class CoreVertexListSchema(Schema):
     id = fields.Str(dumps_only=True)
     title = fields.Str(required=True)
     templateData = fields.Str(required=True)
+    content = fields.Str(required=True)
 
 
 class CoreVertexDetailSchema(Schema):
@@ -85,3 +86,4 @@ class CoreVertexDetailSchema(Schema):
     template = fields.Nested(TemplateDetailSchema,
                              required=False,
                              dumps_only=True)
+    content = fields.Str(required=True)

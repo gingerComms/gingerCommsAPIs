@@ -367,6 +367,9 @@ class RetrieveUpdateDeleteTemplatePropertiesView(
     def get_object(self):
         """ Uses the vertex_attribute added to the View to get the
             templateProperty
+
+            TODO: Change this to retrieve template properties under the given
+                template and team only
         """
         template_property = TemplateProperty.filter(id=self.get_vertex_id())
         if template_property:
@@ -476,6 +479,48 @@ class RetrieveUpdateDeleteTeamsView(RetrieveUpdateAPIView, DeleteVertexMixin):
 core_app.add_url_rule("/team/<vertex_id>",
                       view_func=RetrieveUpdateDeleteTeamsView
                       .as_view("retrieve_update_delete_teams"))
+
+
+class TemplatePropertiesIndexUpdateView(MethodView):
+    """ Implements the PUT endpoint for receiving multiple properties
+        and updating all of their indexes based on their location
+        in the request body array
+    """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
+    def put(self, vertex=None, vertex_id=None, template_id=None, **kwargs):
+        """ Endpoint used for update template properties index values """
+        data = json.loads(request.data)
+        if "properties" not in data:
+            return jsonify_response({
+                "status": "Properties missing"
+            }, 400)
+
+        template = Template.get_template_with_properties(
+            template_id, vertex.id)
+        prop_ids = [i.id for i in template.properties]
+        inp_ids = [i["id"] for i in data["properties"]]
+
+        # Checking that all of the properties given exist under this
+        # template
+        if not set(prop_ids) == set(inp_ids):
+            return jsonify_response({
+                "status": "Template Properties not found in template"
+            }, 400)
+
+        properties = TemplateProperty.update_properties_index(
+            inp_ids)
+        schema = TemplatePropertySchema(many=True)
+        response = json.loads(schema.dumps(properties).data)
+
+        return jsonify_response(response, 200)
+
+core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>"
+                      "/properties_index",
+                      view_func=TemplatePropertiesIndexUpdateView
+                      .as_view("template_properties_index_update"))
 
 
 # [TODO]

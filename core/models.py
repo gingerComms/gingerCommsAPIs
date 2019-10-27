@@ -297,6 +297,7 @@ class TemplateProperty(Vertex):
         "fieldType": str,
         # Contains certain options (list etc.) for the property; JSON str
         "propertyOptions": str,
+        "index": int
     }
 
     @classmethod
@@ -307,6 +308,19 @@ class TemplateProperty(Vertex):
         if value:
             value = re.sub(r"[^a-zA-Z0-9]", "", value)
         return super().create(value=value, **data)
+
+    @classmethod
+    def update_properties_index(cls, property_ids):
+        """ Receives a list of property IDs, and updates all of their
+            index fields with their index in the given list
+        """
+        query = f"g.V().hasLabel('{cls.LABEL}').choose(id())"
+        for index, prop_id in enumerate(property_ids):
+            query += f".option('{prop_id}', property('index', {index}))"
+
+        result = client.submit(query).all().result()
+
+        return [cls.vertex_to_instance(i) for i in result]
 
 
 class Template(Vertex):

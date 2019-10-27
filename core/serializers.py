@@ -9,6 +9,7 @@ class TemplatePropertySchema(Schema):
     name = fields.Str(required=True)
     fieldType = fields.Str(required=True)
     propertyOptions = fields.Str(required=True)
+    index = fields.Integer(required=False)
 
 
 class TemplateDetailSchema(Schema):

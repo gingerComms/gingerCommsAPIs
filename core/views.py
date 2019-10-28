@@ -136,7 +136,9 @@ class ListCreateCoreVertexView(MethodView):
             "template": {
                 "id": template.id,
                 "name": template.name,
-                "canHaveChildren": template.canHaveChildren
+                "canHaveChildren": template.canHaveChildren,
+                "pilForegroundColor": template.pillForegroundColor,
+                "pillBackgroundColor": template.pillBackgroundColor
             }
         }
         return jsonify_response(response, 201)
@@ -232,14 +234,19 @@ class ListCreateTemplatesView(MethodView):
         if not vertex:
             return jsonify_response({"error": "Vertex not found"}, 404)
 
+        # Basic validation for the input
+        schema = TemplateListSchema()
+        data = schema.loads(request.data)
+        if data.errors:
+            return jsonify_response(data.errors, 400)
+
         data = json.loads(request.data)
 
-        # Basic validation for the input
-        if "name" not in data or "canHaveChildren" not in data:
-            return jsonify_response({"error": "Invalid schema"}, 400)
-
-        template = Template.create(name=data["name"],
-                                   canHaveChildren=data["canHaveChildren"])
+        template = Template.create(
+            name=data["name"], canHaveChildren=data["canHaveChildren"],
+            pillBackgroundColor=data["pillBackgroundColor"],
+            pillForegroundColor=data["pillForegroundColor"])
+        template.properties = None  # This is the vertex's `properties` field being Nulled
         owns_edge = TeamOwnsTemplate.create(team=vertex.id,
                                             template=template.id)
 

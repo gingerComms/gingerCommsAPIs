@@ -18,12 +18,14 @@ class TemplateDetailSchema(Schema):
     name = fields.Str(required=True)
     canHaveChildren = fields.Bool(dumps_only=True)
     properties = fields.Method("get_template_properties", dumps_only=True)
+    pillForegroundColor = fields.Str(required=True)
+    pillBackgroundColor = fields.Str(required=True)
 
     def get_template_properties(self, obj):
         """ Uses the template methods to get a serialized list of
             properties
         """
-        if obj.properties:
+        if obj.properties and isinstance(obj.properties, list):
             properties = obj.properties
         else:
             properties = TemplateHasProperty.get_template_properties(obj.id)
@@ -46,6 +48,8 @@ class TemplateListSchema(Schema):
     id = fields.Str(dumps_only=True)
     name = fields.Str(required=True)
     canHaveChildren = fields.Bool(required=True)
+    pillForegroundColor = fields.Str(required=True)
+    pillBackgroundColor = fields.Str(required=True)
 
 
 class TeamSchema(Schema):

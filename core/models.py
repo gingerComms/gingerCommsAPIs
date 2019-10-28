@@ -301,15 +301,6 @@ class TemplateProperty(Vertex):
     }
 
     @classmethod
-    def create(cls, value=None, **data):
-        """ Valuefies the value to make it code friendly before passing
-            it on to the regular create method
-        """
-        if value:
-            value = re.sub(r"[^a-zA-Z0-9]", "", value)
-        return super().create(value=value, **data)
-
-    @classmethod
     def update_properties_index(cls, property_ids):
         """ Receives a list of property IDs, and updates all of their
             index fields with their index in the given list
@@ -331,7 +322,9 @@ class Template(Vertex):
     LABEL = "template"
     properties = {
         "name": str,
-        "canHaveChildren": bool
+        "canHaveChildren": bool,
+        "pillForegroundColor": str,
+        "pillBackgroundColor": str
     }
 
     @classmethod

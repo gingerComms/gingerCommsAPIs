@@ -113,6 +113,6 @@ class TreeViewListSchema(Schema):
     template = fields.Nested(TemplateListSchema,
                              required=False,
                              dumps_only=True)
-    children = fields.Nested(CoreVertexDetailSchema,
+    children = fields.Nested(CoreVertexTreeSchema,
                              many=True,
                              dumps_only=True)

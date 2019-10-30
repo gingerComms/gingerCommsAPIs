@@ -137,7 +137,7 @@ class ListCreateCoreVertexView(MethodView):
                 "id": template.id,
                 "name": template.name,
                 "canHaveChildren": template.canHaveChildren,
-                "pilForegroundColor": template.pillForegroundColor,
+                "pillForegroundColor": template.pillForegroundColor,
                 "pillBackgroundColor": template.pillBackgroundColor
             }
         }

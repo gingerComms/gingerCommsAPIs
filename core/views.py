@@ -208,6 +208,41 @@ core_app.add_url_rule("/coreVertex/<vertex_id>",
                       .as_view("retrieve_update_core_vertices"))
 
 
+class ChangeCoreVertexParentView(MethodView):
+    """ Contains the endpoint used for changing the parent of a given
+        core vertex
+    """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="coreVertex",
+        direct_allowed_roles=[],  # TODO: Add roles here
+        indirect_allowed_roles=["team_admin", "team_lead"])
+    def put(self, vertex=None, vertex_id=None, **kwargs):
+        """ Changes the parent of the given core vertex after removing existing
+            parent edge
+        """
+        data = json.loads(request.data)
+        if "newParent" not in data:
+            return jsonify_response({
+                "status": "New parent not specified"
+            }, 400)
+
+        query = f"g.V().has('id', '{vertex.id}').as('node')" + \
+            f".inE('{CoreVertexOwnership.LABEL}').as('existingEdge')" + \
+            f".inV().addE('{CoreVertexOwnership.LABEL}')" + \
+            f".from(g.V().has('id', '{data['newParent']}'))" + \
+            f".select('existingEdge').drop()"
+        res = client.submit(query)
+
+        return jsonify_response({
+            "status": "Success"
+        }, 200)
+
+core_app.add_url_rule("/coreVertex/<vertex_id>/change_parent",
+                      view_func=ChangeCoreVertexParentView
+                      .as_view("change_core_vertex_parent"))
+
+
 class ListCreateTemplatesView(MethodView):
     """ Container for the LIST and CREATE Template endpoints
         for a given Team

@@ -221,9 +221,9 @@ class ListCreateTemplatesView(MethodView):
         if not vertex:
             return jsonify_response({"error": "Vertex not found"}, 404)
 
-        result = template.get_template_with_details(vertex.id)
+        templates = Template.get_templates_with_details(vertex.id)
 
-        return jsonify_response(result, 200)
+        return jsonify_response(templates, 200)
 
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
@@ -528,6 +528,28 @@ core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>"
                       "/properties_index",
                       view_func=TemplatePropertiesIndexUpdateView
                       .as_view("template_properties_index_update"))
+
+
+class NodesTreeListView(MethodView):
+    """ Returns a list of nodes that are direct children of the given
+        node ID along with their closest sub-children
+    """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        direct_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
+        indirect_allowed_roles=["team_member", "team_admin", "team_lead"])
+    def get(self, vertex=None, vertex_type=None, vertex_id=None):
+        """ Returns a nested tree-view for the given node's children """
+        tree = CoreVertexOwnership.get_children_tree(vertex.id)
+
+        schema = TreeViewListSchema(many=True)
+        response = json.loads(schema.dumps(tree).data)
+
+        return jsonify_response(response, 200)
+
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/tree_view",
+                      view_func=NodesTreeListView
+                      .as_view("nodes-tree-list-view"))
 
 
 # [TODO]

@@ -92,3 +92,27 @@ class CoreVertexDetailSchema(Schema):
                              required=False,
                              dumps_only=True)
     content = fields.Str(required=True)
+
+
+class CoreVertexTreeSchema(Schema):
+    """ Schema used for CoreVertex Tree List view endpoint """
+    id = fields.Str(dumps_only=True)
+    title = fields.Str(required=True)
+    templateData = fields.Str(required=True)
+    template = fields.Nested(TemplateListSchema,
+                             required=False,
+                             dumps_only=True)
+    content = fields.Str(required=True)
+
+
+class TreeViewListSchema(Schema):
+    """ Schema used for the TreeListView for core-vertices/teams """
+    id = fields.Str(dumps_only=True)
+    title = fields.Str(required=True)
+    templateData = fields.Str(required=True)
+    template = fields.Nested(TemplateListSchema,
+                             required=False,
+                             dumps_only=True)
+    children = fields.Nested(CoreVertexDetailSchema,
+                             many=True,
+                             dumps_only=True)

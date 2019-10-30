@@ -402,13 +402,29 @@ class Template(Vertex):
         """
         query = f"g.V().has('{Team.LABEL}', 'id', '{team_id}')" + \
             f".out('{TeamOwnsTemplate.LABEL}').hasLabel('{Template.LABEL}')" + \
-            f".project('id', 'name', 'topicsCount')" + \
+            f".project('id', 'name', 'topicsCount', 'properties')" + \
             f".by(values('id')).by(values('name'))" + \
             f".by(inE('{CoreVertexInheritsFromTemplate.LABEL}').outV()" + \
-            f".hasLabel('{CoreVertex.LABEL}').count())"
+            f".hasLabel('{CoreVertex.LABEL}').count())" + \
+            f".by(outE('{TemplateHasProperty.LABEL}').inV().fold())"
         result = client.submit(query).all().result()
 
-        return result
+        templates = []
+        for template in result:
+            properties = [TemplateProperty.vertex_to_instance(i)
+                          for i in template["properties"]]
+            template["properties"] = []
+            for prop in properties:
+                template["properties"].append({
+                    "id": prop.id,
+                    "name": prop.name,
+                    "fieldType": prop.fieldType,
+                    "propertyOptions": prop.propertyOptions,
+                    "index": prop.index
+                })
+            templates.append(template)
+
+        return templates
 
 
 class TemplateHasProperty(Edge):
@@ -489,6 +505,48 @@ class CoreVertexOwnership(Edge):
         result = client.submit(query).all().result()
 
         return [CoreVertex.vertex_to_instance(i) for i in result]
+
+    @staticmethod
+    def get_children_tree(parent_id):
+        """ Returns the children of the given parent node in a tree view
+            list format as [ {'name': '...', 'children': [...]} ] with their
+            direct sub-children
+        """
+        query = f"g.V().has('id', '{parent_id}').out('owns')" + \
+            f".hasLabel('{CoreVertex.LABEL}').as('children')" + \
+            f".select('children').by(project('topChild', 'template', 'sub_children')" + \
+            f".by()" + \
+            f".by(outE('{CoreVertexInheritsFromTemplate.LABEL}').inV())" + \
+            f".by(outE('{CoreVertexOwnership.LABEL}').inV()" + \
+            f".hasLabel('{CoreVertex.LABEL}').as('subchild')" + \
+            f".outE('{CoreVertexInheritsFromTemplate.LABEL}').inV()" + \
+            f".as('subchildTemplate')" + \
+            f".select('subchild', 'subchildTemplate').fold()))"
+
+        tree = []
+
+        # Raises an exception if there are NO direct children
+        try:
+            result = client.submit(query).all().result()
+        except:
+            return tree
+
+        for child_data in result:
+            child = CoreVertex.vertex_to_instance(child_data["topChild"])
+            child.template = CoreVertex.vertex_to_instance(
+                child_data["template"])
+            sub_children = []
+
+            for sub_child in child_data["sub_children"]:
+                cv = CoreVertex.vertex_to_instance(sub_child["subchild"])
+                cv.template = Template.vertex_to_instance(
+                    sub_child["subchildTemplate"])
+                sub_children.append(cv)
+            child.children = sub_children
+
+            tree.append(child)
+
+        return tree
 
     @classmethod
     def get_root(cls, core_vertex_id):

@@ -247,11 +247,14 @@ class ChangeCoreVertexParentView(MethodView):
             children_ids = ",".join(
                 [f"'{i.id}'" for i in existing_direct_children])
             children_relocate_query = f"g.V().has('id', within({children_ids}))" + \
-                f".inE('{CoreVertexOwnership.LABEL}').as('oldVertices').inV()" + \
-                f".addE('{CoreVertexOwnership.LABEL}')" + \
-                f".from(g.V().has('id', '{old_parent_id}'))"
-            children_relocate_query += ".select('oldVertices').drop()"
-            print(children_relocate_query)
+                f".inE('{CoreVertexOwnership.LABEL}').drop()"
+            client.submit(children_relocate_query).all().result()
+
+            children_relocate_query = f"g.V().has('id', '{old_parent_id}')"
+            for index, child in enumerate(existing_direct_children):
+                children_relocate_query += f".addE('{CoreVertexOwnership.LABEL}')" + \
+                    f".to(g.V().has('id', '{child.id}'))"
+                children_relocate_query += ".outV()"
             client.submit(children_relocate_query).all().result()
 
         # Removing the existing parent edge, and adding the new edge

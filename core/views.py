@@ -79,17 +79,15 @@ class ListCreateCoreVertexView(MethodView):
         indirect_allowed_roles=["team_admin", "team_lead", "topic_member"])
     def get(self, vertex=None, vertex_type=None,
             vertex_id=None, template_id=None):
-        """ Returns all direct coreVertices under the given parent's
-            identifier
-        """
+        """ Returns all corevertices that inherit from the given template id """
         if not vertex:
-            return jsonify_response({"error": "Vertex not found"}, 404) 
+            return jsonify_response({"error": "Vertex not found"}, 404)
 
-        children = CoreVertexOwnership.get_children(
-            vertex_id, vertex_type, template_id=template_id)
+        core_vertices = CoreVertexInheritsFromTemplate \
+            .get_all_template_inheritors(template_id)
 
         schema = CoreVertexListSchema(many=True)
-        response = json.loads(schema.dumps(children).data)
+        response = json.loads(schema.dumps(core_vertices).data)
 
         return jsonify_response(response, 200)
 
@@ -226,13 +224,43 @@ class ChangeCoreVertexParentView(MethodView):
             return jsonify_response({
                 "status": "New parent not specified"
             }, 400)
+        # Moving all of the direct children to the existing parent IF
+        # the node has been made a child of one of it's older children
+        existing_data_query = f"g.V().has('id', '{vertex.id}')" + \
+            f".project('existingParent', 'newParent', 'directChildren')" + \
+            f".by(inE('{CoreVertexOwnership.LABEL}').outV())" + \
+            f".by(until(has('id', '{data['newParent']}').or().loops().is(30))" + \
+            f".repeat(out('{CoreVertexOwnership.LABEL}')).fold())" + \
+            f".by(outE('{CoreVertexOwnership.LABEL}').inV().fold())"
+        existing_data = client.submit(existing_data_query).all().result()[0]
+        old_parent_id = existing_data["existingParent"]["id"]
+        existing_direct_children = [CoreVertex.vertex_to_instance(i) for
+                                    i in existing_data["directChildren"]]
+        new_parent_is_child = len(existing_data["newParent"]) >= 1
 
+        print("Existing Data", existing_data)
+
+        # Updating first level children to have an edge to the old parent
+        # if the new parent is a sub-child of the moved node
+        if new_parent_is_child:
+            print("NEW PARENT IS CHILD")
+            children_ids = ",".join(
+                [f"'{i.id}'" for i in existing_direct_children])
+            children_relocate_query = f"g.V().has('id', within({children_ids}))" + \
+                f".inE('{CoreVertexOwnership.LABEL}').as('oldVertices').inV()" + \
+                f".addE('{CoreVertexOwnership.LABEL}')" + \
+                f".from(g.V().has('id', '{old_parent_id}'))"
+            children_relocate_query += ".select('oldVertices').drop()"
+            print(children_relocate_query)
+            client.submit(children_relocate_query).all().result()
+
+        # Removing the existing parent edge, and adding the new edge
         query = f"g.V().has('id', '{vertex.id}').as('node')" + \
             f".inE('{CoreVertexOwnership.LABEL}').as('existingEdge')" + \
             f".inV().addE('{CoreVertexOwnership.LABEL}')" + \
             f".from(g.V().has('id', '{data['newParent']}'))" + \
             f".select('existingEdge').drop()"
-        res = client.submit(query)
+        res = client.submit(query).all().result()
 
         return jsonify_response({
             "status": "Success"

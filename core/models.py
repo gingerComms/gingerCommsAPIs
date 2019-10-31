@@ -116,6 +116,16 @@ class CoreVertexInheritsFromTemplate(Edge):
 
         return data
 
+    @classmethod
+    def get_all_template_inheritors(cls, template_id):
+        """ Returns all vertices that inherit from this template id """
+        query = f"g.V().has('{Template.LABEL}', 'id', '{template_id}')" + \
+            f".in('{cls.LABEL}')"
+
+        res = client.submit(query).all().result()
+
+        return [CoreVertex.vertex_to_instance(i) for i in res]
+
 
 class Team(Vertex):
     """ Represents a Team that is "created-by" a single account

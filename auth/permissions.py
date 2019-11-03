@@ -25,7 +25,7 @@ def account_held_by_user(view):
         account = account[0]
 
         # Confirming that the account is a user account
-        user_accounts = user.get_held_accounts()
+        user_accounts = user.get_held_accounts(user.id)
         if not account.id in user_accounts:
             return flask.abort(make_response(
                 jsonify({"error": "Account is not held by the user."}), 403))

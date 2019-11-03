@@ -180,16 +180,23 @@ class User(Vertex):
         "password": str  # This should be a string hashed using bcrypt
     }
 
-    def get_held_accounts(self, initialize_models=False):
-        """ Returns all accounts "held by" (edge) this user
+    @classmethod
+    def get_held_accounts(cls, user_id, initialize_models=False):
+        """ Returns all accounts "held by" (edge) this user or the accounts
+             that the user has access to at least one of the teams in
+
             If the `initialize_models` arg is True, the vertexes are converted
             into Account models before being returned; otherwise they're
             returned as IDs
         """
-        user_accounts_q = f"g.V().hasLabel('{self.LABEL}')" + \
-                           f".has('id', '{self.id}')" + \
-                           f".out('{UserHoldsAccount.LABEL}')" + \
-                           f".hasLabel('{Account.LABEL}')"
+        user_accounts_q = f"g.V().has('{cls.LABEL}', 'id', '{user_id}')" + \
+                           f".as('u').out('{UserHoldsAccount.LABEL}')" + \
+                           f".hasLabel('{Account.LABEL}')" + \
+                           f".store('accounts').select('u')" + \
+                           f".out('{UserAssignedToCoreVertex.LABEL}')" + \
+                           f".hasLabel('team').in('{AccountOwnsTeam.LABEL}')" + \
+                           f".store('accounts').cap('accounts')" + \
+                           f".unfold().dedup()"
         user_accounts = client.submit(user_accounts_q).all().result()
 
         if initialize_models:

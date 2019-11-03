@@ -98,7 +98,7 @@ def create_account():
     if 'title' not in data:
         return jsonify_response({"errors": "`title` field is required."}, 400)
 
-    held_accounts = user.get_held_accounts()
+    held_accounts = user.get_held_accounts(user.id)
     if held_accounts:
         user_accounts = ",".join(f"'{i}'" for i in held_accounts)
         user_account_names_q = \
@@ -129,9 +129,8 @@ class ListCreateAccountsView(MethodView):
         """ Returns a serialized list of accounts that the authenticated
             user has access to
         """
-        user_id = get_jwt_identity()
-        user = User.filter(id=user_id)[0]
-        held_accounts = user.get_held_accounts(initialize_models=True)
+        held_accounts = User.get_held_accounts(
+            get_jwt_identity(), initialize_models=True)
 
         schema = AccountsListSchema(many=True)
         response = schema.dumps(held_accounts)
@@ -143,14 +142,12 @@ class ListCreateAccountsView(MethodView):
         """ POST endpoint used for creating new secondary Accounts linked
             to the currently authenticated user
         """
-        user_id = get_jwt_identity()
-        user = User.filter(id=user_id)[0]
         data = json.loads(request.data)
 
         if 'title' not in data:
             return jsonify_response({"errors": "`title` field is required."}, 400)
 
-        held_accounts = user.get_held_accounts()
+        held_accounts = User.get_held_accounts(user_id)
         if held_accounts:
             user_accounts = ",".join(f"'{i}'" for i in held_accounts)
             user_account_names_q = \
@@ -165,7 +162,7 @@ class ListCreateAccountsView(MethodView):
                     400)
 
         account = Account.create(title=data["title"])
-        edge = UserHoldsAccount.create(user=user.id, account=account.id,
+        edge = UserHoldsAccount.create(user=user_id, account=account.id,
                                        relationType="secondary")
 
         response = {

@@ -75,8 +75,8 @@ class ListCreateCoreVertexView(MethodView):
     """
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
-        direct_allowed_roles=["team_admin", "team_lead", "topic_member"],  # TODO: Add CV Roles here
-        indirect_allowed_roles=["team_admin", "team_lead", "topic_member"])
+        direct_allowed_roles=["team_admin", "team_lead", "team_member"],  # TODO: Add CV Roles here
+        indirect_allowed_roles=["team_admin", "team_lead", "team_member"])
     def get(self, vertex=None, vertex_type=None,
             vertex_id=None, template_id=None):
         """ Returns all corevertices that inherit from the given template id """
@@ -618,10 +618,15 @@ core_app.add_url_rule("/<vertex_type>/<vertex_id>/tree_view",
                       .as_view("nodes-tree-list-view"))
 
 
-class NodesAssignedUsersListCreateView(MethodView):
+class ListCreateNodesAssignedUsersView(MethodView):
     """ Container for endpoints for listing assigned users and
         assigning new users to a given coreVertex
     """
+    allowed_roles = {
+        "team": ["team_member", "team_admin", "team_lead"],
+        "coreVertex": ["cv_member", "cv_admin", "cv_lead"]
+    }
+
     @jwt_required
     @permissions.core_vertex_permission_decorator_factory(
         indirect_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
@@ -636,9 +641,140 @@ class NodesAssignedUsersListCreateView(MethodView):
 
         return jsonify_response(members, 200)
 
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_admin", "team_lead",
+                              "cv_admin", "cv_lead"])
+    def post(self, vertex=None, vertex_type=None, vertex_id=None):
+        """ Endpoint for assigning a particular role for a node to
+            a user
+        """
+        current_user = get_jwt_identity()
+        data = json.loads(request.data)
+        if "user" not in data or "role" not in data:
+            return jsonify_response({
+                "status": "The `user` and `role` must be provided."
+            }, 400)
+        if data["role"] not in self.allowed_roles[vertex_type]:
+            return jsonify_response({
+                "status": f"Roles must be in {self.allowed_roles[vertex_type]}"
+            }, 400)
+
+        target_user = auth.User.filter(email=data["user"])
+        if not target_user:
+            return jsonify_response({
+                "status": f"User with provided email doesn't exist."
+            }, 404)
+        target_user = target_user[0]
+
+        existing_role = auth.UserAssignedToCoreVertex.get_user_assigned_role(
+            vertex.id, target_user.id, inv_label=vertex_type)
+        if existing_role:
+            return jsonify_response({
+                "status": f"User already has a role for this node"
+            }, 400)
+
+        edge = auth.UserAssignedToCoreVertex.create(
+            outv_id=target_user.id, outv_label="user",
+            inv_id=vertex.id, inv_label=vertex_type, role=data["role"])
+        user = auth.User.filter(id=current_user)[0]
+
+        return jsonify_response({
+            "role": edge.role,
+            "id": target_user.id,
+            "email": target_user.email,
+            "avatarLink": ""
+        }, 201)
+
 core_app.add_url_rule("/<vertex_type>/<vertex_id>/assignees",
-                      view_func=NodesAssignedUsersListCreateView
+                      view_func=ListCreateNodesAssignedUsersView
                       .as_view("nodes-assigned-users"))
+
+
+class UpdateDeleteNodesAssignedUsers(MethodView):
+    """ Contains the PUT and DELETE method for assigned users
+        for a given node
+    """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_admin", "team_lead",
+                              "cv_admin", "cv_lead"])
+    def put(self, vertex=None, vertex_type=None,
+            vertex_id=None, assignee_id=None):
+        """ Endpoint for updating a user's role for a given node """
+        target_user = auth.User.filter(id=assignee_id)
+        if not target_user:
+            return jsonify_response({
+                "status": f"User with provided ID doesn't exist"
+            }, 404)
+        target_user = target_user[0]
+
+        data = json.loads(request.data)
+        if "role" not in data:
+            return jsonify_response({
+                "status": f"The `role` parameter must be provided"
+            }, 400)
+
+        current_user_role = auth.UserAssignedToCoreVertex \
+            .get_user_assigned_role(vertex.id, get_jwt_identity(),
+                                    inv_label=vertex_type)
+        target_user_role = auth.UserAssignedToCoreVertex \
+            .get_user_assigned_role(vertex.id, target_user.id,
+                                    inv_label=vertex_type)
+        if "admin" in data["role"] and "lead" in current_user_role.role or \
+                "admin" in target_user_role.role and \
+                "lead" in current_user_role.role:
+            return jsonify_response({
+                "status": f"Action not permitted"
+            }, 403)
+
+        # Updating the role for the target user
+        query = f"g.V().has('{auth.User.LABEL}', 'id', '{target_user.id}')" + \
+            f".outE('{auth.UserAssignedToCoreVertex.LABEL}').as('e')" + \
+            f".inV().has('{vertex.LABEL}', 'id', '{vertex.id}')" + \
+            f".select('e').property('role', '{data['role']}')"
+        result = client.submit(query).all().result()
+
+        return jsonify_response({
+            "role": data['role']
+        }, 200)
+
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_admin", "team_lead",
+                              "cv_admin", "cv_lead"])
+    def delete(self, vertex=None, vertex_type=None,
+               vertex_id=None, assignee_id=None):
+        """ Endpoint for removing an assigned user edge for a given
+            node/user pair
+        """
+        target_user = auth.User.filter(id=assignee_id)
+        if not target_user:
+            return jsonify_response({
+                "status": f"User with provided ID doesn't exist"
+            }, 404)
+        target_user = target_user[0]
+
+        edge = auth.UserAssignedToCoreVertex.filter(
+            outv_label="user", inv_label=vertex_type,
+            outv_id=target_user.id, inv_id=vertex.id)
+        if not edge:
+            return jsonify_response({
+                "status": f"User doesn't have any role for this node"
+            }, 400)
+        edge = edge[0]
+        edge.delete()
+
+        return jsonify_response({
+            "status": "Successfully deleted!"
+        })
+
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/assignees/<assignee_id>",
+                      view_func=UpdateDeleteNodesAssignedUsers
+                      .as_view("nodes-assigned-users-detail"))
 
 
 # [TODO]

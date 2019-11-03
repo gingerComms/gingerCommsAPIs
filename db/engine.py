@@ -243,16 +243,20 @@ class Edge(PropertyValidationMixin):
         return instance
 
     @classmethod
-    def filter(cls, outv_id=None, inv_id=None, **properties):
+    def filter(cls, outv_id=None, inv_id=None,
+               outv_label=None, inv_label=None, **properties):
         """ Returns all edges matching the given properties between the
             given out and in vertices
         """
+        OUTV_LABEL = outv_label or cls.OUTV_LABEL
+        INV_LABEL = inv_label or cls.INV_LABEL
+
         # Filtering by the out and in vertices if provided, otherwise just
         # the properties
         if outv_id and inv_id:
-            query = f"g.V().has('{cls.OUTV_LABEL}', 'id', '{outv_id}')" + \
+            query = f"g.V().has('{OUTV_LABEL}', 'id', '{outv_id}')" + \
                 f".outE('{cls.LABEL}').as('e')" + \
-                f".inV().has('{cls.INV_LABEL}', 'id', '{inv_id}')" + \
+                f".inV().has('{INV_LABEL}', 'id', '{inv_id}')" + \
                 f".select('e')"
         else:
             query = f"g.E().hasLabel('{cls.LABEL}')"

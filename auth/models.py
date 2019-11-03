@@ -126,6 +126,25 @@ class UserAssignedToCoreVertex(Edge):
             return edge
         return None
 
+    @classmethod
+    def get_members(cls, vertex_type, vertex_id):
+        """ Returns a list of members (id, email, avatarLink, role) that
+            are assigned to the given coreVertex
+                - SERIALIZED
+        """
+        query = f"g.V().has('{vertex_type}', 'id', '{vertex_id}')" + \
+            f".inE('{cls.LABEL}').as('e')" + \
+            f".outV().as('user').project('id', 'email', 'role')" + \
+            f".by(select('user').values('id'))" + \
+            f".by(select('user').values('email'))" + \
+            f".by(select('e').values('role'))"
+        result = client.submit(query).all().result()
+
+        for i in result:
+            i["avatarLink"] = None
+
+        return result
+
 
 class Account(Vertex):
     """ Represents an Account which can include an infinite number of Users

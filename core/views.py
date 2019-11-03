@@ -618,6 +618,29 @@ core_app.add_url_rule("/<vertex_type>/<vertex_id>/tree_view",
                       .as_view("nodes-tree-list-view"))
 
 
+class NodesAssignedUsersListCreateView(MethodView):
+    """ Container for endpoints for listing assigned users and
+        assigning new users to a given coreVertex
+    """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_member", "team_admin", "team_lead",
+                              "cv_member", "cv_admin", "cv_lead"])
+    def get(self, vertex=None, vertex_type=None, vertex_id=None):
+        """ Returns all users with their roles currently assigned
+            to the given core vertex
+        """
+        members = auth.UserAssignedToCoreVertex.get_members(
+            vertex_type, vertex_id)
+
+        return jsonify_response(members, 200)
+
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/assignees",
+                      view_func=NodesAssignedUsersListCreateView
+                      .as_view("nodes-assigned-users"))
+
+
 # [TODO]
 class CoreVertexRolesView(MethodView):
     """ Container for all the core vertices' roles endpoint;

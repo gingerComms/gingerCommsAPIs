@@ -30,7 +30,7 @@ class ListCreateTeamsView(MethodView):
         """ A GET endpoint that returns all of the teams connected to this
             account
         """
-        teams = Team.get_teams_with_detail(account_id)
+        teams = Team.get_teams_with_detail(account_id, get_jwt_identity())
 
         return jsonify_response(teams, 200)
 

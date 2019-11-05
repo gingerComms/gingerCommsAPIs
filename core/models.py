@@ -170,15 +170,16 @@ class Team(Vertex):
         return team
 
     @classmethod
-    def get_teams_with_detail(cls, account_id):
+    def get_teams_with_detail(cls, account_id, user_id):
         """ Returns all teams owned by the given account id with its
             own properties as well as the following details:
                 - templatesCount,
                 - member (array)
                 - topicsCount
+            -- Returns only the teams the user has access to
             -- SERIALIZED
         """ 
-        query = f"g.V().hasLabel('{Team.LABEL}')" + \
+        query = f"g.V().hasLabel('{Team.LABEL}').as('team')" + \
             f".inE('{auth.AccountOwnsTeam.LABEL}').outV()" + \
             f".has('id', '{account_id}').out('{auth.AccountOwnsTeam.LABEL}')" + \
             f".inE('{auth.UserAssignedToCoreVertex.LABEL}').outV()" + \
@@ -213,7 +214,12 @@ class Team(Vertex):
             if member not in teams[team["id"]]["members"]:
                 teams[team["id"]]["members"].append(member)
 
-        return list(teams.values())
+        # Filtering to only teams that this user is a member of
+        teams = list(teams.values())
+        teams = [team for team in teams if user_id in [member["id"]
+                 for member in team["members"]]]
+
+        return teams
 
 
 class CoreVertex(Vertex):

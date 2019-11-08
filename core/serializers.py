@@ -1,5 +1,5 @@
 from marshmallow import Schema, fields, validates, ValidationError
-from .models import TemplateHasProperty
+from .models import *
 import json
 
 
@@ -81,6 +81,25 @@ class CoreVertexListSchema(Schema):
     content = fields.Str(required=True)
 
 
+class BreadcrumbsSchema(Schema):
+    """ Basic schema for nodes in a vertex's path - used as breadcrumbs """
+    id = fields.Str(dumps_only=True)
+    displayName = fields.Method("get_display_name", dumps_only=True)
+    label = fields.Method("get_label", dumps_only=True)
+
+    def get_label(self, obj):
+        """ Returns `coreVertex` for coreVertices and `team` for Teams """
+        if isinstance(obj, CoreVertex):
+            return "coreVertex"
+        return "team"
+
+    def get_display_name(self, obj):
+        """ Returns the title for coreVertices and name for Teams """
+        if isinstance(obj, CoreVertex):
+            return obj.title
+        return obj.name
+
+
 class CoreVertexDetailSchema(Schema):
     """ Schema used for CoreVertex Detail endpoints; contains all of the
         details, including the template details [TODO: ADD TEMPLATE DETAILS]
@@ -92,6 +111,7 @@ class CoreVertexDetailSchema(Schema):
                              required=False,
                              dumps_only=True)
     content = fields.Str(required=True)
+    path = fields.Nested(BreadcrumbsSchema, many=True, dumps_only=True)
 
 
 class CoreVertexTreeSchema(Schema):

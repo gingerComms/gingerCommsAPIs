@@ -169,7 +169,7 @@ class RetrieveUpdateDeleteCoreVertexView(RetrieveUpdateAPIView, DeleteVertexMixi
             - Overridden to add the decorators, and reuse the Vertex
                 instance injected through the permission
         """
-        self.get_object = lambda: vertex.get_core_vertex_with_template(
+        self.get_object = lambda: vertex.get_core_vertex_with_details(
             vertex.id)
         return super().get()
 

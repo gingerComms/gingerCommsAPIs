@@ -264,19 +264,24 @@ class CoreVertex(Vertex):
         return roles
 
     @classmethod
-    def get_core_vertex_with_template(cls, vertex_id):
-        """ Returns the core vertex details as well as the template
+    def get_core_vertex_with_details(cls, vertex_id):
+        """ Returns the core vertex with the following details:
+            'template'
+            'templateProperties'
+            'path' -> breadcrumbs
             with it's properties in another `template` attribute
             NOTE: Raises an exception if the vertex id isn't valid
         """
         query = f"g.V().has('{cls.LABEL}', 'id', '{vertex_id}')" + \
-            f".fold().project('cv', 'template', 'templateProperties')" + \
+            f".fold().project('cv', 'template', 'templateProperties', 'path')" + \
             f".by(unfold())" + \
             f".by(unfold().outE('{CoreVertexInheritsFromTemplate.LABEL}')" + \
             f".inV().fold())" + \
             f".by(unfold().outE('{CoreVertexInheritsFromTemplate.LABEL}')" + \
             f".inV().outE('{TemplateHasProperty.LABEL}')" + \
-            f".inV().fold())"
+            f".inV().fold())" + \
+            f".by(unfold().until(__.hasLabel('team'))" + \
+            f".repeat(__.in('{CoreVertexOwnership.LABEL}')).path())"
 
         result = client.submit(query).all().result()[0]
 
@@ -286,6 +291,13 @@ class CoreVertex(Vertex):
         core_vertex.template.properties = [
             Template.vertex_to_instance(i) for i
             in result["templateProperties"]]
+        
+        # Adding the path - the first is the object itself, the last is the team
+        path = result["path"]["objects"]
+        core_vertex.path = []
+        core_vertex.path += [CoreVertex.vertex_to_instance(i) for i in path[2:-1]]
+        core_vertex.path += [Team.vertex_to_instance(path[-1])]
+        core_vertex.path = reversed(core_vertex.path)
 
         return core_vertex
 

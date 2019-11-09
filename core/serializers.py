@@ -81,8 +81,8 @@ class CoreVertexListSchema(Schema):
     content = fields.Str(required=True)
 
 
-class BreadcrumbsSchema(Schema):
-    """ Basic schema for nodes in a vertex's path - used as breadcrumbs """
+class GenericNodeSchema(Schema):
+    """ Basic schema for nodes - used for breadcrumbs/favorite nodes """
     id = fields.Str(dumps_only=True)
     displayName = fields.Method("get_display_name", dumps_only=True)
     label = fields.Method("get_label", dumps_only=True)
@@ -111,7 +111,7 @@ class CoreVertexDetailSchema(Schema):
                              required=False,
                              dumps_only=True)
     content = fields.Str(required=True)
-    path = fields.Nested(BreadcrumbsSchema, many=True, dumps_only=True)
+    path = fields.Nested(GenericNodeSchema, many=True, dumps_only=True)
 
 
 class CoreVertexTreeSchema(Schema):
@@ -123,12 +123,14 @@ class CoreVertexTreeSchema(Schema):
                              required=False,
                              dumps_only=True)
     content = fields.Str(required=True)
+    isFavorite = fields.Boolean(required=True)
 
 
 class TreeViewListSchema(Schema):
     """ Schema used for the TreeListView for core-vertices/teams """
     id = fields.Str(dumps_only=True)
     title = fields.Str(required=True)
+    isFavorite = fields.Boolean(required=True)
     templateData = fields.Str(required=True)
     template = fields.Nested(TemplateListSchema,
                              required=False,

@@ -606,7 +606,8 @@ class NodesTreeListView(MethodView):
         indirect_allowed_roles=["team_member", "team_admin", "team_lead"])
     def get(self, vertex=None, vertex_type=None, vertex_id=None):
         """ Returns a nested tree-view for the given node's children """
-        tree = CoreVertexOwnership.get_children_tree(vertex.id)
+        tree = CoreVertexOwnership.get_children_tree(
+            vertex.id, get_jwt_identity())
 
         schema = TreeViewListSchema(many=True)
         response = json.loads(schema.dumps(tree).data)
@@ -775,6 +776,111 @@ class UpdateDeleteNodesAssignedUsers(MethodView):
 core_app.add_url_rule("/<vertex_type>/<vertex_id>/assignees/<assignee_id>",
                       view_func=UpdateDeleteNodesAssignedUsers
                       .as_view("nodes-assigned-users-detail"))
+
+
+class ListCreateFavoriteNodes(MethodView):
+    """ Container for the LIST and CREATE endpoints for favorite nodes """
+    vertex_types = {
+        "team": Team,
+        "coreVertex": CoreVertex
+    }
+
+    @jwt_required
+    def get(self):
+        """ Returns all of the user's favorite nodes that he has access to
+            UNTESTED
+        """
+        favorite_nodes = UserFavoriteNode.get_favorite_nodes(
+            get_jwt_identity())
+
+        schema = GenericNodeSchema(many=True)
+        response = json.loads(schema.dumps(favorite_nodes).data)
+
+        return jsonify_response(response, 200)
+
+    @jwt_required
+    def post(self):
+        """ Endpoint used for favoriting a node for the currently
+            authenticated user
+        """
+        user_id = get_jwt_identity()
+        data = json.loads(request.data)
+        if "nodeId" not in data or "nodeType" not in data:
+            return jsonify_response({
+                "error": "`nodeId` or `nodeType` not provided."
+            }, 400)
+
+        vertex_class = self.vertex_types[data["nodeType"]]
+        vertex = vertex_class.filter(id=data["nodeId"])
+        if not vertex:
+            return jsonify_response({
+                "error": "Node does not exist."
+            }, 404)
+        vertex = vertex[0]
+
+        existing_edge = UserFavoriteNode.filter(
+            outv_id=user_id, inv_id=vertex.id,
+            outv_label="user", inv_label=data["nodeType"])
+        if existing_edge:
+            return jsonify_response({
+                "error": "Favorite node already exists."
+            }, 400)
+
+        vertex_roles = vertex.get_user_permissions(user_id)
+        direct_vertex_role = vertex_roles["direct_role"]
+        indirect_vertex_roles = vertex_roles["indirect_roles"]
+
+        if direct_vertex_role or [i for i in indirect_vertex_roles
+                                  if "lead" in i or "admin" in i]:
+            edge = UserFavoriteNode.create(
+                outv_id=user_id, inv_id=vertex.id,
+                outv_label="user", inv_label=data["nodeType"])
+
+            schema = GenericNodeSchema()
+            response = json.loads(schema.dumps(vertex).data)
+
+            return jsonify_response(response, 201)
+
+        return jsonify_response({
+            "error": "User does not have access to node"
+        }, 403)
+
+core_app.add_url_rule("/favorite_nodes",
+                      view_func=ListCreateFavoriteNodes
+                      .as_view("list-create-favorite-nodes"))
+
+
+class DestroyFavoriteNodesView(MethodView):
+    """ Provides a DELETE endpoint for favorite node edges """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_admin", "team_lead", "team_member"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_admin", "team_lead", "team_member"
+                              "cv_admin", "cv_lead", "cv_member"])
+    def delete(self, vertex=None, vertex_type=None, vertex_id=None):
+        """ Removes the favorite node edge between the user and the
+            given vertex
+        """
+        user_id = get_jwt_identity()
+
+        edge = UserFavoriteNode.filter(
+            outv_id=user_id, inv_id=vertex.id,
+            outv_label="user", inv_label=vertex_type)
+        if not edge:
+            return jsonify_response({
+                "error": "Edge does not exist."
+            }, 404)
+
+        edge = edge[0]
+        edge.delete()
+
+        return jsonify_response({
+            "status": "Deleted Successfully"
+        }, 200)
+
+core_app.add_url_rule("/favorite_nodes/<vertex_type>/<vertex_id>",
+                      view_func=DestroyFavoriteNodesView
+                      .as_view("destroy-favorite-nodes"))
 
 
 # [TODO]

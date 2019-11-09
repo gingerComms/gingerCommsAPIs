@@ -127,6 +127,41 @@ class CoreVertexInheritsFromTemplate(Edge):
         return [CoreVertex.vertex_to_instance(i) for i in res]
 
 
+class UserFavoriteNode(Edge):
+    """ A User -> Team/CoreVertex edge used for favoriting nodes """
+    LABEL = "favoriteNode"
+    OUTV_LABEL = "user"
+    INV_LABEL = "team"  # can be replaced with coreVertex on init
+    properties = {}
+
+    @classmethod
+    def get_favorite_nodes(cls, user_id, parent_id=None):
+        """ Returns all of the favorite nodes for the given user that
+            he has access to
+        """
+        if parent_id:
+            query = f"g.V().has('{CoreVertex.LABEL}', 'id', '{parent_id}')" + \
+                f".emit()" + \
+                f".until(out('{CoreVertexOwnership.LABEL}').count().is(0))" + \
+                f".repeat(out('{CoreVertexOwnership.LABEL}'))"
+        else:
+            query = f"g.V().hasLabel('{CoreVertex.LABEL}')"
+        query += f".as('cv').in('{cls.LABEL}').has('id', '{user_id}')" + \
+            f".select('cv')"
+
+        print(query)
+        result = client.submit(query).all().result()
+
+        nodes = []
+        for node in result:
+            if node["label"] == "coreVertex":
+                nodes.append(CoreVertex.vertex_to_instance(node))
+            else:
+                nodes.append(Team.vertex_to_instance(node))
+
+        return nodes
+
+
 class Team(Vertex):
     """ Represents a Team that is "created-by" a single account
         (replaceable), and holds all of the permissions for all sub-nodes
@@ -520,10 +555,11 @@ class CoreVertexOwnership(Edge):
         return [CoreVertex.vertex_to_instance(i) for i in result]
 
     @staticmethod
-    def get_children_tree(parent_id):
+    def get_children_tree(parent_id, user_id):
         """ Returns the children of the given parent node in a tree view
             list format as [ {'name': '...', 'children': [...]} ] with their
             direct sub-children
+                - Also returns an isFavorite value for each child
         """
         query = f"g.V().has('id', '{parent_id}').out('owns')" + \
             f".hasLabel('{CoreVertex.LABEL}').as('children')" + \
@@ -537,6 +573,9 @@ class CoreVertexOwnership(Edge):
             f".select('subchild', 'subchildTemplate').fold()))"
 
         tree = []
+        favorite_nodes = UserFavoriteNode.get_favorite_nodes(
+            user_id, parent_id=parent_id)
+        favorite_nodes = [i.id for i in favorite_nodes]
 
         # Raises an exception if there are NO direct children
         try:
@@ -548,10 +587,12 @@ class CoreVertexOwnership(Edge):
             child = CoreVertex.vertex_to_instance(child_data["topChild"])
             child.template = CoreVertex.vertex_to_instance(
                 child_data["template"])
+            child.isFavorite = child.id in favorite_nodes
             sub_children = []
 
             for sub_child in child_data["sub_children"]:
                 cv = CoreVertex.vertex_to_instance(sub_child["subchild"])
+                cv.isFavorite = cv.id in favorite_nodes
                 cv.template = Template.vertex_to_instance(
                     sub_child["subchildTemplate"])
                 sub_children.append(cv)

@@ -1,6 +1,15 @@
 from marshmallow import Schema, fields, validates, ValidationError
 from .models import *
+import auth.serializers
 import json
+
+
+class MessageListSchema(Schema):
+    """ Schema for message lists """
+    id = fields.Str(dumps_only=True)
+    text = fields.Str(required=True)
+    sent_at = fields.Str(dumps_only=True)
+    author = fields.Nested(auth.serializers.UserListSchema, dumps_only=True)
 
 
 class TemplatePropertySchema(Schema):

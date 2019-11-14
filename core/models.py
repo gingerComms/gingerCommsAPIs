@@ -6,6 +6,7 @@ from db.exceptions import (
 )
 import auth
 import re
+import datetime
 
 
 class TeamOwnsTemplate(Edge):
@@ -149,7 +150,6 @@ class UserFavoriteNode(Edge):
         query += f".as('cv').in('{cls.LABEL}').has('id', '{user_id}')" + \
             f".select('cv')"
 
-        print(query)
         result = client.submit(query).all().result()
 
         nodes = []
@@ -360,6 +360,95 @@ class TemplateProperty(Vertex):
         result = client.submit(query).all().result()
 
         return [cls.vertex_to_instance(i) for i in result]
+
+
+class Message(Vertex):
+    """ Represents a message sent against a node by a user """
+    LABEL = "message"
+    properties = {
+        "text": str,
+        "sent_at": str
+    }
+
+    @staticmethod
+    def list_messages(node_id, start=0, end=10,
+                      date_filter="gt", filter_date=None):
+        """ Returns all messages sent against the given node since the
+            given `since` datetime object
+            NOTE: Serialized
+        """
+        query = f"g.V().has('id', '{node_id}')" + \
+            f".out('{NodeHasMessage.LABEL}').order().by('sent_at')"
+
+        if date_filter:
+            query += f".has('sent_at', {date_filter}('{filter_date.isoformat()}'))"
+
+        query += f".project('id', 'text', 'sent_at', 'author')" + \
+            f".by(values('id'))" + \
+            f".by(values('text'))" +\
+            f".by(values('sent_at'))" + \
+            f".by(inE('{UserSentMessage.LABEL}').outV())"
+
+        result = client.submit(query).all().result()
+        if result:
+            result = result[start:end]
+            messages = []
+
+            for item in result:
+                msg = Message(
+                    id=item["id"],
+                    text=item["text"],
+                    sent_at=item["sent_at"]
+                )
+                msg.author = auth.User.vertex_to_instance(item["author"])
+                messages.append(msg)
+            return messages
+        return result
+
+
+class NodeHasMessage(Edge):
+    """ Represents an edge between a vertex a node and a message;
+        node could be either a team/coreVertex
+    """
+    LABEL = "hasMessage"
+    OUTV_LABEL = "team"  # Can be changed to coreVertex
+    INV_LABEL = Message.LABEL
+    properties = {}
+
+
+class UserSentMessage(Edge):
+    """ Represents an edge between a user and a message; turning the user
+        into an author of the message
+    """
+    LABEL = "sentMessage"
+    OUTV_LABEL = "user"
+    INV_LABEL = Message.LABEL
+    properties = {}
+
+
+class UserLastCheckedMessage(Edge):
+    """ Represents a continuously updated edge that shows when the user
+        last read a messaeg against a node
+    """
+    LABEL = "lastCheckedMessages"
+    OUTV_LABEL = "user"
+    INV_LABEL = "team"  # This could be a coreVertex as well
+    properties = {
+        "time": str  # This must be an iso8601 formatted datetime object
+    }
+
+    @staticmethod
+    def get_last_checked_time(user_id, node_id):
+        """ Returns the time that this user last checked messages """
+        query = f"g.V().has('{auth.User.LABEL}', 'id', '{user_id}')" + \
+            f".outE('{UserLastCheckedMessage.LABEL}').as('e')" + \
+            f".inV().has('id', '{node_id}').select('e').order()" + \
+            f".by('time', decr)"
+        result = client.submit(query).all().result()
+        if result:
+            last_read = UserLastCheckedMessage.edge_to_instance(result[0])
+            return last_read
+        return None
 
 
 class Template(Vertex):

@@ -12,6 +12,7 @@ class UserRegistrationSchema(Schema):
 
 class UserListSchema(Schema):
     """ Basic List schema including base details for the User Vertex """
+    id = fields.Str(dumps_only=True)
     fullName = fields.Str(required=True)
     email = fields.Str(required=True)
     username = fields.Str(required=True)

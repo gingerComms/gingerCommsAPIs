@@ -1,5 +1,6 @@
 from flask import Blueprint, request
 from flask.views import MethodView
+from datetime import datetime as dt
 import auth
 from .models import *
 from .serializers import *
@@ -883,110 +884,106 @@ core_app.add_url_rule("/favorite_nodes/<vertex_type>/<vertex_id>",
                       .as_view("destroy-favorite-nodes"))
 
 
-# [TODO]
-class CoreVertexRolesView(MethodView):
-    """ Container for all the core vertices' roles endpoint;
-            Returns the role owned by the user (current | input) on GET,
-            Adds new role on POST
-        This view can be used for retrieving and creating new roles for
-        a core vertex of types Team | CoreVertex
-    """
-    def handle_input_target_user(self, current_user_id):
-        """ Handles conditional block for fetching the "input_user" or
-            the current user based on the request query parameter
-            Returns the (<target_user>, <error>) as a tuple
-        """
-        input_user = request.args.get("user", None)
+class ListCreateNodeMessagesView(MethodView):
+    """ Container for list and create endpoints for node-messages """
 
-        if input_user:
-            target_user = auth.User.filter(id=input_user)
-            if not target_user:
-                return None, jsonify_response(
-                    {"error": "Input User does not exist."}, 404)
-            target_user = target_user[0]
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_member", "team_admin", "team_lead",
+                              "cv_member", "cv_admin", "cv_lead"])
+    def get(self, vertex=None, vertex_type=None, vertex_id=None):
+        """ Returns all users with their roles currently assigned
+            to the given core vertex
+        """
+        user_id = get_jwt_identity()
+
+        # ISO Format times for filtering 10 before or after
+        before = request.args.get("before")
+        after = request.args.get("after")
+
+        last_checked = UserLastCheckedMessage \
+            .get_last_checked_time(user_id, vertex.id)
+        if not before and (last_checked or after):
+            since = last_checked.time if not after else after
+            messages = Message.list_messages(
+                vertex.id,
+                start=0, end=10,
+                filter_date=dt.strptime(since, "%Y-%m-%dT%H:%M:%S.%f"),
+                date_filter="gt" if after else "gte")
+        elif before:
+            messages = Message.list_messages(
+                vertex.id,
+                start=-10, end=None,
+                filter_date=dt.strptime(before, "%Y-%m-%dT%H:%M:%S.%f"),
+                date_filter="lt")
+        # If the user hasn't checked the messages at all, return the last
+        # page
         else:
-            target_user = auth.User.filter(id=current_user_id)[0]
+            messages = Message.list_messages(vertex.id, start=-10, end=None)
+        # Updating the last read time for the user to the latest message
+        # loaded - IF it's newer than the current last read value
+        if not before and len(messages) > 0:
+            last_checked_data = {
+                "outv_label": "user",
+                "inv_label": vertex_type,
+                "outv_id": user_id,
+                "inv_id": vertex.id,
+                "time": messages[-1].sent_at
+            }
+            last_checked.delete()
+            UserLastCheckedMessage.create(**last_checked_data)
 
-        return target_user, None
+        schema = MessageListSchema(many=True)
+        response = json.loads(schema.dumps(messages).data)
 
-    @jwt_required
-    @permissions.any_core_vertex_role_required
-    def get(self, vertex_id=None, core_vertex=None,
-            vertex_type=None, current_user_role=None):
-        """ Returns the role owned by the current user/input user (?user)
-            arg
-        """
-        current_user = get_jwt_identity()
-
-        target_user, error = self.handle_input_target_user(current_user)
-        if error:
-            return error
-
-        assigned_role = auth.UserAssignedToCoreVertex.get_user_assigned_role(
-            core_vertex.id, target_user.id, inv_label=vertex_type)
-
-        return jsonify_response({"role": getattr(assigned_role, "role", None)})
+        return jsonify_response(response, 200)
 
     @jwt_required
-    @permissions.any_core_vertex_role_required
-    def post(self, vertex_id=None, core_vertex=None,
-             vertex_type=None, current_user_role=None):
-        """ Adds a new role (or updates the existing role) for the current or
-            input user on the given team
-        """
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_member", "team_admin", "team_lead",
+                              "cv_member", "cv_admin", "cv_lead"])
+    def post(self, vertex=None, vertex_type=None, vertex_id=None):
+        """ Creation endpoint used for adding new messages against a node """
         data = json.loads(request.data)
-        if "role" not in data:
-            return jsonify_response(
-                {"error": "Request must include a `role` parameter"}, 400)
+        user_id = get_jwt_identity()
+        user = auth.User.filter(id=user_id)[0]
 
-        current_user = get_jwt_identity()
+        schema = MessageListSchema()
+        errors = schema.loads(request.data).errors
+        if errors:
+            return jsonify_response({"errors": errors}, 400)
 
-        target_user, error = self.handle_input_target_user(current_user)
-        if error:
-            return error
+        sent_at = dt.now().isoformat()
+        message = Message.create(text=data["text"], sent_at=sent_at)
+        author_edge = UserSentMessage.create(user=user_id, message=message.id)
+        node_edge = NodeHasMessage.create(
+            outv_label=vertex_type, inv_label="message",
+            outv_id=vertex.id, inv_id=message.id)
 
-        if target_user.id == current_user:
-            target_user_role = current_user_role
-        else:
-            target_user_role = auth.UserAssignedToCoreVertex \
-                .get_user_assigned_role(
-                    core_vertex.id, target_user.id, inv_label=vertex_type)
+        # Updating last checked
+        last_checked = UserLastCheckedMessage \
+            .get_last_checked_time(user_id, vertex.id)
+        if last_checked:
+            last_checked.delete()
+        last_checked_edge = UserLastCheckedMessage.create(
+            outv_label="user", inv_label=vertex_type,
+            outv_id=user_id, inv_id=vertex.id, time=sent_at)
 
-        # Validation for whether the user has enough permissions to even
-        # make this role update
-        requested_role = data["role"]
-        lacking_role_response = jsonify_response(
-            {"error": "User lacks the required role for the role requested."},
-            403)
-        if current_user_role.role == "member":
-            # Since members can't change ANY roles
-            return lacking_role_response
-        elif current_user_role.role == "lead" and (
-                requested_role == "admin" or requested_role == "lead"):
-            # Since leads can only control member roles
-            return lacking_role_response
-        elif current_user_role.role == "admin":
-            # Since admins can do it all
-            pass
-
-        # Removing all existing edges for the target user against this vertex
-        if target_user_role is not None:
-            target_user_role.delete()
-
-        # Creating a new assignment for the teamuser pair with the given role
-        edge = auth.UserAssignedToCoreVertex \
-            .create(user=target_user.id,
-                    role=requested_role,
-                    inv_label=vertex_type,
-                    **{vertex_type: core_vertex.id})
-
+        response = json.loads(schema.dumps(message).data)
         return jsonify_response({
-            "user": target_user.id,
-            "team": core_vertex.id,
-            "role": edge.role
-        }, 200)
+            "id": message.id,
+            "text": message.text,
+            "sent_at": sent_at,
+            "author": {
+                "id": user.id,
+                "fullName": user.fullName,
+                "email": user.email,
+                "username": user.username
+            }
+        }, 201)
 
-# <vertex_type> must be within team | coreVertex
-core_app.add_url_rule(
-    "/<vertex_type>/<vertex_id>/roles",
-    view_func=CoreVertexRolesView.as_view("core_vertex_roles"))
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/messages",
+                      view_func=ListCreateNodeMessagesView
+                      .as_view("list-create-node-messages"))

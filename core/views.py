@@ -931,7 +931,8 @@ class ListCreateNodeMessagesView(MethodView):
                 "inv_id": vertex.id,
                 "time": messages[-1].sent_at
             }
-            last_checked.delete()
+            if last_checked is not None:
+                last_checked.delete()
             UserLastCheckedMessage.create(**last_checked_data)
 
         schema = MessageListSchema(many=True)

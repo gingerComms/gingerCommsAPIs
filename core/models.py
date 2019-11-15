@@ -380,7 +380,7 @@ class Message(Vertex):
         query = f"g.V().has('id', '{node_id}')" + \
             f".out('{NodeHasMessage.LABEL}').order().by('sent_at')"
 
-        if date_filter:
+        if date_filter and filter_date:
             query += f".has('sent_at', {date_filter}('{filter_date.isoformat()}'))"
 
         query += f".project('id', 'text', 'sent_at', 'author')" + \

@@ -138,7 +138,7 @@ class UserFavoriteNode(Edge):
     @classmethod
     def get_favorite_nodes(cls, user_id, parent_id=None):
         """ Returns all of the favorite nodes for the given user that
-            he has access to
+            he has access to 
         """
         if parent_id:
             query = f"g.V().has('{CoreVertex.LABEL}', 'id', '{parent_id}')" + \
@@ -159,6 +159,44 @@ class UserFavoriteNode(Edge):
             else:
                 nodes.append(Team.vertex_to_instance(node))
 
+        return nodes
+
+    @staticmethod
+    def get_inbox_nodes(user_id):
+        """ Returns a list of coreVertices that the user has favorited
+            along with the last-message and template details
+        """
+        query = f"g.V().has('{auth.User.LABEL}', 'id', '{user_id}')" + \
+            f".out('{UserFavoriteNode.LABEL}')" + \
+            f".hasLabel('{CoreVertex.LABEL}')" + \
+            f".project('node', 'template'," + \
+            f"'lastMessage', 'parent')" + \
+            f".by()" + \
+            f".by(outE('{CoreVertexInheritsFromTemplate.LABEL}').inV())" + \
+            f".by(outE('{NodeHasMessage.LABEL}').inV().order()" + \
+            f".by('sent_at', decr).limit(1).fold())" + \
+            f".by(until(__.hasLabel('{Team.LABEL}'))" + \
+            f".repeat(__.inE('{CoreVertexOwnership.LABEL}').outV()).fold())"
+
+        result = client.submit(query).all().result()
+
+        nodes = []
+        for node in result:
+            node_vertex = node["node"]
+            # Converting to the node instance based on the label
+            if node_vertex["label"] == CoreVertex.LABEL:
+                node_vertex = CoreVertex.vertex_to_instance(node_vertex)
+            else:
+                node_vertex = Team.vertex_to_instance(node_vertex)
+            # Adding the template and last message to the node
+            node_vertex.template = Template.vertex_to_instance(
+                node["template"])
+            node_vertex.last_message = Message.vertex_to_instance(
+                node["lastMessage"][0]) if node["lastMessage"] else None
+            node_vertex.parentId = node["parent"][0]["id"] if \
+                node["parent"] else None
+
+            nodes.append(node_vertex)
         return nodes
 
 

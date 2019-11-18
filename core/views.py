@@ -988,3 +988,26 @@ class ListCreateNodeMessagesView(MethodView):
 core_app.add_url_rule("/<vertex_type>/<vertex_id>/messages",
                       view_func=ListCreateNodeMessagesView
                       .as_view("list-create-node-messages"))
+
+
+class InboxMessagesListView(MethodView):
+    """ Contains for the GET endpoint which returns a list of nodes +
+        last message details for the nodes that the user has in his
+        favorites
+    """
+    @jwt_required
+    def get(self):
+        """ Returns a list of nodes + last message details for the nodes
+            the user has in his favorites
+        """
+        user_id = get_jwt_identity()
+        nodes = UserFavoriteNode.get_inbox_nodes(user_id)
+
+        schema = InboxNodesSchema(many=True)
+        response = json.loads(schema.dumps(nodes).data)
+
+        return jsonify_response(response, 200)
+
+core_app.add_url_rule("/inbox_nodes",
+                      view_func=InboxMessagesListView
+                      .as_view("list-inbox-nodes"))

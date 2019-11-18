@@ -147,3 +147,31 @@ class TreeViewListSchema(Schema):
     children = fields.Nested(CoreVertexTreeSchema,
                              many=True,
                              dumps_only=True)
+
+
+class InboxNodesSchema(Schema):
+    """ Schema used for the inbox-dialog that handles both teams and
+        coreVertices
+    """
+    id = fields.Str(dumps_only=True)
+    name = fields.Method("get_display_name", dumps_only=True)
+    nodeType = fields.Method("get_node_type", dumps_only=True)
+    template = fields.Nested(TemplateListSchema,
+                             required=False,
+                             dumps_only=True)
+    last_message = fields.Nested(MessageListSchema,
+                                required=False,
+                                dumps_only=True)
+    parentId = fields.Str(dumps_only=True)
+
+    def get_node_type(self, obj):
+        """ Returns `coreVertex` for coreVertices and `team` for Teams """
+        if isinstance(obj, CoreVertex):
+            return "coreVertex"
+        return "team"
+
+    def get_display_name(self, obj):
+        """ Returns the title for coreVertices and name for Teams """
+        if isinstance(obj, CoreVertex):
+            return obj.title
+        return obj.name

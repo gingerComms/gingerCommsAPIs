@@ -163,6 +163,7 @@ class InboxNodesSchema(Schema):
                                 required=False,
                                 dumps_only=True)
     parentId = fields.Str(dumps_only=True)
+    last_seen_time = fields.Str(dumps_only=True)
 
     def get_node_type(self, obj):
         """ Returns `coreVertex` for coreVertices and `team` for Teams """

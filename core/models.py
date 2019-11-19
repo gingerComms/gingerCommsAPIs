@@ -168,15 +168,18 @@ class UserFavoriteNode(Edge):
         """
         query = f"g.V().has('{auth.User.LABEL}', 'id', '{user_id}')" + \
             f".out('{UserFavoriteNode.LABEL}')" + \
-            f".hasLabel('{CoreVertex.LABEL}')" + \
+            f".hasLabel('{CoreVertex.LABEL}').as('cv')" + \
+            f".out('{NodeHasMessage.LABEL}').select('cv').dedup()" + \
             f".project('node', 'template'," + \
-            f"'lastMessage', 'parent')" + \
+            f"'lastMessage', 'parent', 'lastSeenMessageTime')" + \
             f".by()" + \
             f".by(outE('{CoreVertexInheritsFromTemplate.LABEL}').inV())" + \
             f".by(outE('{NodeHasMessage.LABEL}').inV().order()" + \
             f".by('sent_at', decr).limit(1).fold())" + \
             f".by(until(__.hasLabel('{Team.LABEL}'))" + \
-            f".repeat(__.inE('{CoreVertexOwnership.LABEL}').outV()).fold())"
+            f".repeat(__.inE('{CoreVertexOwnership.LABEL}').outV()).fold())" + \
+            f".by(inE('{UserLastCheckedMessage.LABEL}').as('e')" + \
+            f".outV().has('id', '{user_id}').select('e').values('time').fold())"
 
         result = client.submit(query).all().result()
 
@@ -195,6 +198,8 @@ class UserFavoriteNode(Edge):
                 node["lastMessage"][0]) if node["lastMessage"] else None
             node_vertex.parentId = node["parent"][0]["id"] if \
                 node["parent"] else None
+            node_vertex.last_seen_time = node["lastSeenMessageTime"][0] if \
+                node["lastSeenMessageTime"] else None
 
             nodes.append(node_vertex)
         return nodes

@@ -121,6 +121,7 @@ class CoreVertexDetailSchema(Schema):
                              dumps_only=True)
     content = fields.Str(required=True)
     path = fields.Nested(GenericNodeSchema, many=True, dumps_only=True)
+    isFavorite = fields.Boolean(required=False, dumps_only=True)
 
 
 class CoreVertexTreeSchema(Schema):

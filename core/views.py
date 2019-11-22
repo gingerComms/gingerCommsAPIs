@@ -171,7 +171,7 @@ class RetrieveUpdateDeleteCoreVertexView(RetrieveUpdateAPIView, DeleteVertexMixi
                 instance injected through the permission
         """
         self.get_object = lambda: vertex.get_core_vertex_with_details(
-            vertex.id)
+            vertex.id, get_jwt_identity())
         return super().get()
 
     @jwt_required

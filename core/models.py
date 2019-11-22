@@ -342,16 +342,18 @@ class CoreVertex(Vertex):
         return roles
 
     @classmethod
-    def get_core_vertex_with_details(cls, vertex_id):
+    def get_core_vertex_with_details(cls, vertex_id, user_id):
         """ Returns the core vertex with the following details:
             'template'
             'templateProperties'
             'path' -> breadcrumbs
+            'isFavorite' -> Whether the user has this node in favorites
             with it's properties in another `template` attribute
             NOTE: Raises an exception if the vertex id isn't valid
         """
         query = f"g.V().has('{cls.LABEL}', 'id', '{vertex_id}')" + \
-            f".fold().project('cv', 'template', 'templateProperties', 'path')" + \
+            f".fold().project('cv', 'template', 'templateProperties', " + \
+            f"'path', 'isFavorite')" + \
             f".by(unfold())" + \
             f".by(unfold().outE('{CoreVertexInheritsFromTemplate.LABEL}')" + \
             f".inV().fold())" + \
@@ -359,7 +361,9 @@ class CoreVertex(Vertex):
             f".inV().outE('{TemplateHasProperty.LABEL}')" + \
             f".inV().fold())" + \
             f".by(unfold().until(__.hasLabel('team'))" + \
-            f".repeat(__.in('{CoreVertexOwnership.LABEL}')).path())"
+            f".repeat(__.in('{CoreVertexOwnership.LABEL}')).path())" + \
+            f".by(unfold().inE('{UserFavoriteNode.LABEL}').outV()" + \
+            f".has('id', '{user_id}').count())"
 
         result = client.submit(query).all().result()[0]
 
@@ -376,6 +380,7 @@ class CoreVertex(Vertex):
         core_vertex.path += [CoreVertex.vertex_to_instance(i) for i in path[2:-1]]
         core_vertex.path += [Team.vertex_to_instance(path[-1])]
         core_vertex.path = reversed(core_vertex.path)
+        core_vertex.isFavorite = result["isFavorite"] > 0
 
         return core_vertex
 

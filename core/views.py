@@ -1011,3 +1011,35 @@ class InboxMessagesListView(MethodView):
 core_app.add_url_rule("/inbox_nodes",
                       view_func=InboxMessagesListView
                       .as_view("list-inbox-nodes"))
+
+
+class TemplateNodesIndexUpdateView(MethodView):
+    """ Contains the Update view which takes an array of nodes with their
+        IDs and templateData as input and updates the entire array
+        in the database (for index maintainence)
+    """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        overwrite_vertex_type="team",
+        direct_allowed_roles=["team_lead", "team_admin"])
+    def put(self, vertex=None, template_id=None, vertex_id=None, **kwargs):
+        """ Updates the templateData property of all received
+            nodes
+            Format: { nodes: [nodeId: templateDataString...] }
+        """
+        data = json.loads(request.data)
+        if "nodes" not in data:
+            return jsonify_response({
+                "status": "Nodes missing"
+            }, 400)
+
+        CoreVertex.bulk_update_template_data(data["nodes"])
+
+        return jsonify_response({
+            "status": "Success"
+        }, 200)
+
+core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>"
+                      "/nodes_index",
+                      view_func=TemplateNodesIndexUpdateView
+                      .as_view("template_nodes_index_update"))

@@ -311,6 +311,21 @@ class CoreVertex(Vertex):
         "content": str  # Text Field that contains formatted text
     }
 
+    @classmethod
+    def bulk_update_template_data(cls, nodes):
+        """ Bulk updates the template data property for each
+            node in the array - format for nodes must be:
+                { nodeId: templateDataString }
+        """
+        query = f"g.V().hasLabel('{cls.LABEL}').choose(id())"
+        for node in nodes:
+            query += f".option('{node['id']}', " + \
+                f"property('templateData', '{node['templateData']}'))"
+
+        result = client.submit(query).all().result()
+
+        return result
+
     def get_user_permissions(self, user_id):
         """ Returns all roles assigned to the given user for this CoreVertex
             as a dictionary of

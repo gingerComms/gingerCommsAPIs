@@ -747,6 +747,7 @@ class CoreVertexOwnership(Edge):
                 cv.isFavorite = cv.id in favorite_nodes
                 cv.template = Template.vertex_to_instance(
                     sub_child["subchildTemplate"])
+                cv.children = []
                 sub_children.append(cv)
             child.children = sub_children
 

@@ -134,6 +134,8 @@ class CoreVertexTreeSchema(Schema):
                              dumps_only=True)
     content = fields.Str(required=True)
     isFavorite = fields.Boolean(required=True)
+    children = fields.List(fields.Str(required=False),
+                           required=False)
 
 
 class TreeViewListSchema(Schema):

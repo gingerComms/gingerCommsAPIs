@@ -721,8 +721,10 @@ class CoreVertexOwnership(Edge):
             f".by(outE('{CoreVertexOwnership.LABEL}').inV()" + \
             f".hasLabel('{CoreVertex.LABEL}').as('subchild')" + \
             f".outE('{CoreVertexInheritsFromTemplate.LABEL}').inV()" + \
-            f".as('subchildTemplate')" + \
-            f".select('subchild', 'subchildTemplate').fold()))"
+            f".as('subchildTemplate').select('subchild')" + \
+            f".map(outE('{CoreVertexOwnership.LABEL}').inV()" + \
+            f".hasLabel('{CoreVertex.LABEL}').count()).as('childCount')" + \
+            f".select('subchild', 'subchildTemplate', 'childCount').fold()))"
 
         tree = []
         favorite_nodes = UserFavoriteNode.get_favorite_nodes(
@@ -747,9 +749,12 @@ class CoreVertexOwnership(Edge):
                 cv.isFavorite = cv.id in favorite_nodes
                 cv.template = Template.vertex_to_instance(
                     sub_child["subchildTemplate"])
-                cv.children = []
+                if sub_child["childCount"] > 0:
+                    print(sub_child["childCount"], cv.title)
+                    cv.children = []
                 sub_children.append(cv)
-            child.children = sub_children
+            if sub_children:
+                child.children = sub_children
 
             tree.append(child)
 

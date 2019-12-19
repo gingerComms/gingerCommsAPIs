@@ -134,10 +134,11 @@ class UserAssignedToCoreVertex(Edge):
         """
         query = f"g.V().has('{vertex_type}', 'id', '{vertex_id}')" + \
             f".inE('{cls.LABEL}').as('e')" + \
-            f".outV().as('user').project('id', 'email', 'role')" + \
+            f".outV().as('user').project('id', 'email', 'role', 'fullName')" + \
             f".by(select('user').values('id'))" + \
             f".by(select('user').values('email'))" + \
-            f".by(select('e').values('role'))"
+            f".by(select('e').values('role'))" + \
+            f".by(select('user').values('fullName'))"
         result = client.submit(query).all().result()
 
         for i in result:

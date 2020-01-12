@@ -173,7 +173,7 @@ class UserFavoriteNode(Edge):
             f".project('node', 'template'," + \
             f"'lastMessage', 'parent', 'lastSeenMessageTime')" + \
             f".by()" + \
-            f".by(outE('{CoreVertexInheritsFromTemplate.LABEL}').inV())" + \
+            f".by(outE('{CoreVertexInheritsFromTemplate.LABEL}').inV().fold())" + \
             f".by(outE('{NodeHasMessage.LABEL}').inV().order()" + \
             f".by('sent_at', decr).limit(1).fold())" + \
             f".by(until(__.hasLabel('{Team.LABEL}'))" + \
@@ -186,22 +186,24 @@ class UserFavoriteNode(Edge):
         nodes = []
         for node in result:
             node_vertex = node["node"]
-            # Converting to the node instance based on the label
-            if node_vertex["label"] == CoreVertex.LABEL:
-                node_vertex = CoreVertex.vertex_to_instance(node_vertex)
-            else:
-                node_vertex = Team.vertex_to_instance(node_vertex)
-            # Adding the template and last message to the node
-            node_vertex.template = Template.vertex_to_instance(
-                node["template"])
-            node_vertex.last_message = Message.vertex_to_instance(
-                node["lastMessage"][0]) if node["lastMessage"] else None
-            node_vertex.parentId = node["parent"][0]["id"] if \
-                node["parent"] else None
-            node_vertex.last_seen_time = node["lastSeenMessageTime"][0] if \
-                node["lastSeenMessageTime"] else None
+            if node["template"]:
+                node["template"] = node["template"][0]
+                # Converting to the node instance based on the label
+                if node_vertex["label"] == CoreVertex.LABEL:
+                    node_vertex = CoreVertex.vertex_to_instance(node_vertex)
+                else:
+                    node_vertex = Team.vertex_to_instance(node_vertex)
+                # Adding the template and last message to the node
+                node_vertex.template = Template.vertex_to_instance(
+                    node["template"])
+                node_vertex.last_message = Message.vertex_to_instance(
+                    node["lastMessage"][0]) if node["lastMessage"] else None
+                node_vertex.parentId = node["parent"][0]["id"] if \
+                    node["parent"] else None
+                node_vertex.last_seen_time = node["lastSeenMessageTime"][0] if \
+                    node["lastSeenMessageTime"] else None
 
-            nodes.append(node_vertex)
+                nodes.append(node_vertex)
         return nodes
 
 

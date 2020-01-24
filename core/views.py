@@ -16,6 +16,7 @@ from utils.general_utils import *
 import json
 from flask_caching import Cache
 from db.engine import client
+from utils.s3_engine import S3Engine
 
 
 core_app = Blueprint("core", __name__)
@@ -1043,3 +1044,73 @@ core_app.add_url_rule("/team/<vertex_id>/templates/<template_id>"
                       "/nodes_index",
                       view_func=TemplateNodesIndexUpdateView
                       .as_view("template_nodes_index_update"))
+
+
+class GeneratePresignedS3PostView(MethodView):
+    """ Returns a presigned POST requesst for the provided filename """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_member", "team_admin", "team_lead",
+                              "cv_member", "cv_admin", "cv_lead"])
+    def post(self, vertex=None, vertex_type=None, vertex_id=None, property_id=None):
+        """ Generates and returns a presigned POST for the provided
+            teamID/propertyID/fileName key
+        """
+        filename = request.form["filePath"]
+        engine = S3Engine()
+        key = f"{vertex.id}/{property_id}/{filename}"
+        signed_url = engine.generate_presigned_post(key)
+
+        return jsonify_response({
+            "postEndpoint": signed_url["url"],
+            "signature": signed_url["fields"]
+        })
+
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/<property_id>/generate_s3_post",
+                      view_func=GeneratePresignedS3PostView
+                      .as_view("generate-presigned-post"))
+
+
+class GeneratePresignedS3GetView(MethodView):
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_member", "team_admin", "team_lead",
+                              "cv_member", "cv_admin", "cv_lead"])
+    def post(self, vertex=None, vertex_type=None, vertex_id=None, property_id=None):
+        """ Generates and returns a presigned GET url for the provided file """
+        filename = json.loads(request.data)["filePath"]
+        engine = S3Engine()
+        key = f"{vertex.id}/{property_id}/{filename}"
+
+        return jsonify_response({
+            "url": engine.generate_presigned_get_url(key)
+        })
+
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/<property_id>/generate_s3_get",
+                      view_func=GeneratePresignedS3GetView
+                      .as_view("generate-presigned-get"))
+
+class DeleteS3FileView(MethodView):
+    """ Container for the S3 file deletion endpoint """
+    @jwt_required
+    @permissions.core_vertex_permission_decorator_factory(
+        indirect_allowed_roles=["team_member", "team_admin", "team_lead"],  # TODO: Add CV roles here
+        direct_allowed_roles=["team_member", "team_admin", "team_lead",
+                              "cv_member", "cv_admin", "cv_lead"])
+    def post(self, vertex=None, vertex_type=None, vertex_id=None, property_id=None):
+        """ Deletes the provided file in the property """
+        filename = json.loads(request.data)["filePath"]
+        engine = S3Engine()
+        key = f"{vertex.id}/{property_id}/{filename}"
+        signed_url = engine.delete_file(key)
+
+        return jsonify_response({
+            "status": "Success"
+        })
+
+
+core_app.add_url_rule("/<vertex_type>/<vertex_id>/<property_id>/delete_file",
+                      view_func=DeleteS3FileView
+                      .as_view("delete-s3-file"))

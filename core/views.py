@@ -1101,7 +1101,8 @@ class GeneratePresignedS3PostView(MethodView):
         filename = request.form["filePath"]
         engine = S3Engine()
         key = f"{vertex.id}/{property_id}/{filename}"
-        signed_url = engine.generate_presigned_post(key, password)
+        signed_url = engine.generate_presigned_post(key,
+                                                    request.form["password"])
 
         return jsonify_response({
             "postEndpoint": signed_url["url"],
@@ -1131,7 +1132,7 @@ class GeneratePresignedS3GetView(MethodView):
         key = f"{vertex.id}/{property_id}/{filename}"
 
         return jsonify_response({
-            "url": engine.generate_presigned_get_url(key, password)
+            "url": engine.generate_presigned_get_url(key, data["password"])
         })
 
 core_app.add_url_rule("/<vertex_type>/<vertex_id>/<property_id>/generate_s3_get",
@@ -1156,7 +1157,7 @@ class DeleteS3FileView(MethodView):
         filename = data["filePath"]
         engine = S3Engine()
         key = f"{vertex.id}/{property_id}/{filename}"
-        signed_url = engine.delete_file(key, password)
+        signed_url = engine.delete_file(key, data["password"])
 
         return jsonify_response({
             "status": "Success"

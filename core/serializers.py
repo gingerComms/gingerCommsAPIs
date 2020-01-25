@@ -65,6 +65,7 @@ class TeamSchema(Schema):
     """ Schema for the basic Team Vertex and it's endpoints """
     name = fields.Str(required=True)
     id = fields.Str(dumps_only=True)
+    password = fields.Str(required=True)
 
 
 class TeamsListSchema(Schema):

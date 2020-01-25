@@ -48,8 +48,7 @@ class ListCreateTeamsView(MethodView):
             return jsonify_response(data.errors, 400)
 
         team = Team.create(
-            name=data.data["name"],
-            password=Team.generate_password_hash(data.data["password"])
+            name=data.data["name"]
         )
         account_edge = auth.AccountOwnsTeam.create(account=account.id, team=team.id)
         user_edge = auth.UserAssignedToCoreVertex.create(
@@ -72,39 +71,6 @@ class ListCreateTeamsView(MethodView):
 
 core_app.add_url_rule("/account/<account_id>/teams",
                       view_func=ListCreateTeamsView.as_view("teams"))
-
-
-class ValidateTeamPasswordView(MethodView):
-    """ Container for the team password validation POST endpoint
-        TODO: Perhaps add team-password token to header to add another
-            level of permissions in every view
-    """
-    @jwt_required
-    @permissions.core_vertex_permission_decorator_factory(
-        overwrite_vertex_type="team",
-        direct_allowed_roles=["team_member", "team_lead", "team_admin"])
-    def post(self, vertex=None, vertex_id=None, **kwargs):
-        """ Validates that the provided password matches the team's
-            stored hash and returns a success/failure response
-        """
-        data = json.loads(request.data)
-        if "password" not in data:
-            return jsonify_response({
-                    "error": "Password not provided"
-            }, 400)
-
-        valid = vertex.check_password(data["password"])
-        if valid:
-            return jsonify_response({
-                "status": "Success"
-            }, 200)
-        return jsonify_response({
-            "status": "Failure"
-        }, 401)
-
-core_app.add_url_rule("/team/<vertex_id>/authorize",
-                      view_func=ValidateTeamPasswordView
-                      .as_view("validate-team-password"))
 
 
 class ListCreateCoreVertexView(MethodView):
@@ -1093,16 +1059,10 @@ class GeneratePresignedS3PostView(MethodView):
         """ Generates and returns a presigned POST for the provided
             teamID/propertyID/fileName key
         """
-        if "password" not in request.form:
-            return jsonify_response({
-                "error": "Password not provided"
-            }, 400)
-
         filename = request.form["filePath"]
         engine = S3Engine()
         key = f"{vertex.id}/{property_id}/{filename}"
-        signed_url = engine.generate_presigned_post(key,
-                                                    request.form["password"])
+        signed_url = engine.generate_presigned_post(key)
 
         return jsonify_response({
             "postEndpoint": signed_url["url"],
@@ -1123,16 +1083,12 @@ class GeneratePresignedS3GetView(MethodView):
     def post(self, vertex=None, vertex_type=None, vertex_id=None, property_id=None):
         """ Generates and returns a presigned GET url for the provided file """
         data = json.loads(request.data)
-        if "password" not in data:
-            return jsonify_response({
-                "error": "Password not provided"
-            }, 400)
         filename = data["filePath"]
         engine = S3Engine()
         key = f"{vertex.id}/{property_id}/{filename}"
 
         return jsonify_response({
-            "url": engine.generate_presigned_get_url(key, data["password"])
+            "url": engine.generate_presigned_get_url(key)
         })
 
 core_app.add_url_rule("/<vertex_type>/<vertex_id>/<property_id>/generate_s3_get",
@@ -1149,15 +1105,11 @@ class DeleteS3FileView(MethodView):
     def post(self, vertex=None, vertex_type=None, vertex_id=None, property_id=None):
         """ Deletes the provided file in the property """
         data = json.loads(request.data)
-        if "password" not in data:
-            return jsonify_response({
-                "error": "Password not provided"
-            }, 400)
 
         filename = data["filePath"]
         engine = S3Engine()
         key = f"{vertex.id}/{property_id}/{filename}"
-        signed_url = engine.delete_file(key, data["password"])
+        signed_url = engine.delete_file(key)
 
         return jsonify_response({
             "status": "Success"

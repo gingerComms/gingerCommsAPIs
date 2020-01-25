@@ -4,8 +4,6 @@ from db.exceptions import (
     CustomValidationFailedException,
     ObjectCanNotBeDeletedException
 )
-from flask_bcrypt import (
-    generate_password_hash, check_password_hash)
 import auth
 import re
 import datetime
@@ -216,27 +214,8 @@ class Team(Vertex):
     """
     LABEL = "team"
     properties = {
-        "name": str,
-        "password": str  # Encrypted string for team level passwords
+        "name": str
     }
-
-    @staticmethod
-    def generate_password_hash(password):
-        """ Encrypts the provided password using bcrypt and sets it
-            as the attribute
-        """
-        return generate_password_hash(password).decode("utf-8")
-
-    def check_password(self, password):
-        """ Checks if the hash of the provided password matches
-            the password stored in the db
-        """
-        assert getattr(self, "password", None)
-
-        if not isinstance(password, bytes):
-            password = password.encode("utf-8")
-
-        return check_password_hash(self.password.encode("utf-8"), password)
 
     def get_user_permissions(self, user_id):
         """ Returns the roles assigned to the given user for this

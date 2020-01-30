@@ -138,15 +138,16 @@ class UserFavoriteNode(Edge):
     @classmethod
     def get_favorite_nodes(cls, user_id, parent_id=None):
         """ Returns all of the favorite nodes for the given user that
-            he has access to 
+            he has access to
         """
         if parent_id:
-            query = f"g.V().has('{CoreVertex.LABEL}', 'id', '{parent_id}')" + \
+            query = f"g.V().has('id', '{parent_id}')" + \
                 f".emit()" + \
                 f".until(out('{CoreVertexOwnership.LABEL}').count().is(0))" + \
                 f".repeat(out('{CoreVertexOwnership.LABEL}'))"
         else:
             query = f"g.V().hasLabel('{CoreVertex.LABEL}')"
+
         query += f".as('cv').in('{cls.LABEL}').has('id', '{user_id}')" + \
             f".select('cv')"
 
@@ -752,7 +753,6 @@ class CoreVertexOwnership(Edge):
                 cv.template = Template.vertex_to_instance(
                     sub_child["subchildTemplate"])
                 if sub_child["childCount"] > 0:
-                    print(sub_child["childCount"], cv.title)
                     cv.children = []
                 sub_children.append(cv)
             if sub_children:

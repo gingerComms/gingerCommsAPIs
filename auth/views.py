@@ -143,6 +143,7 @@ class ListCreateAccountsView(MethodView):
             to the currently authenticated user
         """
         data = json.loads(request.data)
+        user_id = get_jwt_identity()
 
         if 'title' not in data:
             return jsonify_response({"errors": "`title` field is required."}, 400)
@@ -166,7 +167,8 @@ class ListCreateAccountsView(MethodView):
                                        relationType="secondary")
 
         response = {
-            "title": account.title
+            "title": account.title,
+            'id': account.id
         }
         return jsonify_response(response, 201)
 auth_app.add_url_rule("/accounts/",

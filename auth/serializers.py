@@ -25,6 +25,8 @@ class AccountDetailSchema(Schema):
     id = fields.Str(required=False)
     title = fields.Str(required=True)
     users = fields.Method("get_account_users")
+    admins = fields.Nested(UserListSchema(many=True),
+                           many=True, required=False)
 
     def get_account_users(self, obj):
         """ Returns all users holding this account as well as their
@@ -40,5 +42,7 @@ class AccountDetailSchema(Schema):
 
 class AccountsListSchema(Schema):
     """ List schema for account instances with only the required details """
-    title = fields.Str(required=True)
     id = fields.Str(required=False)
+    title = fields.Str(required=True)
+    admins = fields.Nested(UserListSchema(many=True),
+                           many=True, required=False)

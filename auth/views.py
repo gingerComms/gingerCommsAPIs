@@ -43,11 +43,12 @@ def register():
     data.data["password"] = generate_password_hash(
         data.data["password"]).decode("utf-8")
 
-    # Creating the User and it's primary account
+    # Creating the User and it's primary account + account admin edge
     user = User.create(**data.data)
     account = Account.create(title=f"myaccount@{user.username}")
-    edge = UserHoldsAccount.create(user=user.id, account=account.id,
-                                   relationType="primary")
+    holds_edge = UserHoldsAccount.create(user=user.id, account=account.id,
+                                         relationType="primary")
+    admin_edge = UserIsAccountAdmin.create(user=user.id, account=account.id)
 
     response = {
         "user": json.loads(schema.dumps(user).data),
@@ -163,12 +164,16 @@ class ListCreateAccountsView(MethodView):
                     400)
 
         account = Account.create(title=data["title"])
-        edge = UserHoldsAccount.create(user=user_id, account=account.id,
-                                       relationType="secondary")
+        held_edge = UserHoldsAccount.create(user=user_id, account=account.id,
+                                            relationType="secondary")
+        admin_edge = UserIsAccountAdmin.create(user=user_id,
+                                               account=account.id)
 
         response = {
             "title": account.title,
-            'id': account.id
+            'id': account.id,
+            "admins": json.loads(UserListSchema(many=True)
+                                 .dumps(User.filter(id=user_id)).data)
         }
         return jsonify_response(response, 201)
 auth_app.add_url_rule("/accounts/",
@@ -182,12 +187,12 @@ class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
 
         TODO: Also add functionality to REMOVE user from account (DELETE)
     """
-    serializer = AccountDetailSchema
+    serializer_class = AccountDetailSchema
     vertex_class = Account
 
     def get_object(self):
         """ Returns the account matching the account id in the url """
-        account = Account.filter(id=account_id)
+        account = Account.get_account_with_admins(account.id)
 
         return account[0] if account else None
 
@@ -196,6 +201,7 @@ class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
     def get(self, account=None, user=None, account_id=None):
         """ Overwritten to add the required User-holds-account permission """
         self.get_object = lambda: account
+        print(account.admins)
         return super().get()
 
     @jwt_required

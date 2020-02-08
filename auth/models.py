@@ -52,6 +52,23 @@ class UserHoldsAccount(Edge):
         return super().delete()
 
 
+class UserIsAccountAdmin(Edge):
+    """ Represents a User->Account relationship held by Account Admins """
+    LABEL = "isAdmin"
+    OUTV_LABEL = "user"
+    INV_LABEL = "account"
+    properties = {}
+
+    @classmethod
+    def get_account_admins(cls, account_id):
+        """ Returns all Users that are admins of the given account """
+        query = f"g.V().has('{Account.LABEL}', 'id', '{account_id}')" + \
+            f".in('{cls.LABEL}')"
+        result = client.submit(query).all().result()
+
+        return [User.vertex_to_instance(i) for i in result]
+
+
 class AccountOwnsTeam(Edge):
     """ Represents an ownership of a Team by an Account (Account -> Team).
         This is used to track financial stats for the teams [owned] by a
@@ -158,6 +175,25 @@ class Account(Vertex):
         "title": str,
     }
 
+    @classmethod
+    def get_account_with_admins(cls, account_id):
+        """ Returns the account details along with the admins of this
+            account
+        """
+        query = f"g.V().has('{cls.LABEL}', 'id', '{account_id}')" + \
+            f".fold().project('account', 'admins')" + \
+            f".by(unfold())" + \
+            f".by(unfold().inE('{UserIsAccountAdmin.LABEL}')" + \
+            f".outV().fold())"
+        result = client.submit(query).all().result()
+        
+        if not result:
+            return []
+        result = result[0]
+        account = Account.vertex_to_instance(result["account"])
+        account.admins = [User.vertex_to_instance(i) for i in result["admins"]]
+        return account
+
     def get_users(self):
         """ Returns all users who "hold" this account through the
             UserHoldsAccount edge
@@ -201,6 +237,20 @@ class User(Vertex):
         user_accounts = client.submit(user_accounts_q).all().result()
 
         if initialize_models:
-            return [Account.vertex_to_instance(i) for i in user_accounts]
+            account_ids = ','.join([f"'{i['id']}'" for i in user_accounts])
+            admins_query = f"g.V().has('id', within({account_ids}))" + \
+                f".inE('{UserIsAccountAdmin.LABEL}')" + \
+                f".project('inV', 'outV')" + \
+                f".by(inV()).by(outV())"
+            admins = client.submit(admins_query).all().result()
+            accounts = []
+            for account in user_accounts:
+                account = Account.vertex_to_instance(account)
+                account.admins = list(map(
+                    lambda x: User.vertex_to_instance(x["outV"]),
+                    filter(lambda x: x["inV"]["id"] == account.id, admins)
+                ))
+                accounts.append(account)
+            return accounts
         else:
             return [i["id"] for i in user_accounts]

@@ -259,13 +259,11 @@ class Team(Vertex):
                 - topicsCount
             -- Returns only the teams the user has access to
             -- SERIALIZED
-        """ 
-        query = f"g.V().hasLabel('{Team.LABEL}').as('team')" + \
-            f".inE('{auth.AccountOwnsTeam.LABEL}').outV()" + \
-            f".has('id', '{account_id}').out('{auth.AccountOwnsTeam.LABEL}')" + \
+        """
+        query = f"g.V().has('{auth.Account.LABEL}', 'id', '{account_id}')" + \
+            f".out('{auth.AccountOwnsTeam.LABEL}').as('team')" + \
             f".inE('{auth.UserAssignedToCoreVertex.LABEL}').outV()" + \
-            f".as('member')" + \
-            f".out('{auth.UserAssignedToCoreVertex.LABEL}')" + \
+            f".as('member').select('team')" + \
             f".project('templatesCount', 'name', 'id', 'member', 'topicsCount')" + \
             f".by(outE('{TeamOwnsTemplate.LABEL}').inV()" + \
             f".hasLabel('{Template.LABEL}').count())" + \

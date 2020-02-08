@@ -18,11 +18,10 @@ def account_held_by_user(view):
         user_id = get_jwt_identity()
         user = User.filter(id=user_id)[0]
 
-        account = Account.filter(id=account_id)
+        account = Account.get_account_with_admins(account_id)
         if not account:
             return flask.abort(make_response(
                 jsonify({"error": "Account does not exist!"}), 404))
-        account = account[0]
 
         # Confirming that the account is a user account
         user_accounts = user.get_held_accounts(user.id)

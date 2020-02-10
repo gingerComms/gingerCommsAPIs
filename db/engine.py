@@ -107,14 +107,22 @@ class Vertex(PropertyValidationMixin):
         return vertex_instance
 
     @classmethod
-    def filter(cls, **properties):
+    def filter(cls, wildcard_properties=[], limit=None, **properties):
         """ Returns all vertices matching the given properties
             NOTE: More complicated queries must be formulated manually.
+            Wildcard properties can be sent in as TextP.startingWith('val'),
+            and they must be part of the `wildcard_properties` array
         """
         query = f"g.V().hasLabel('{cls.LABEL}')"
 
         for key, value in properties.items():
-            query += f".has('{key}', '{value}')"
+            if key in wildcard_properties:
+                query += f".has('{key}', {value})"
+            else:
+                query += f".has('{key}', '{value}')"
+
+        if limit:
+            query += f".limit({limit})"
 
         results = client.submit(query).all().result()
 

@@ -181,17 +181,18 @@ auth_app.add_url_rule("/accounts/",
                           "list_create_accounts"))
 
 
-class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
-    """ Provides functionality to add or remove users from Accounts
-        through secondary UserHoldsAccount edges
-
-        TODO: Also add functionality to REMOVE user from account (DELETE)
+class RetrieveCreateRemoveAccountAdminsView(RetrieveUpdateAPIView):
+    """ Provides functionality to add, remove and list Users who hold
+        an admin position for the given account through the
+        UserIsAccountAdmin edge
     """
     serializer_class = AccountDetailSchema
     vertex_class = Account
 
     def get_object(self):
-        """ Returns the account matching the account id in the url """
+        """ Returns the account matching the account id in the url with
+            it's admins
+        """
         account = Account.get_account_with_admins(account.id)
 
         return account[0] if account else None
@@ -201,14 +202,14 @@ class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
     def get(self, account=None, user=None, account_id=None):
         """ Overwritten to add the required User-holds-account permission """
         self.get_object = lambda: account
-        print(account.admins)
         return super().get()
 
+    # TODO: Add is account admin permission
     @jwt_required
     @permissions.account_held_by_user
-    def put(self, account=None, user=None, account_id=None):
-        """ Endpoint used for adding a user to the given account with a
-            secondary relationship
+    def post(self, account=None, user=None, account_id=None):
+        """ Endpoint used for adding a user to the given account
+            as an admin
         """
         data = json.loads(request.data)
 
@@ -217,35 +218,52 @@ class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
                 "error": "User not provided."
             }, 401)
 
-        # Creating a new edge from the user to the account
-        try:
-            edge = UserHoldsAccount.create(
-                user=data["user"], account=account.id,
-                relationType="secondary")
-        except CustomValidationFailedException as e:
+        # Checking if this edge already exists
+        admin_edge = UserIsAccountAdmin.filter(
+            outv_id=data["user"], inv_id=account.id)
+        if admin_edge:
             return jsonify_response({
-                "error": e.message
-            }, 400)
+                "error": "User is already an admin for this account."
+            }, 401)
 
-        response = AccountDetailSchema().dumps(account).data
-        return jsonify_response(json.loads(response), 200)
+        # Creating a new edge from the user to the account
+        admin_edge = UserIsAccountAdmin.create(
+            user=data["user"], account=account.id)
 
+        # Creating a holds edge if one doesn't already exist
+        query = f"g.V().has('{User.LABEL}', 'id', '{data['user']}')" + \
+            f".outE('{UserHoldsAccount.LABEL}').as('e')" + \
+            f".inV().has('id', '{account.id}')" + \
+            f".select('e').fold().coalesce(" + \
+            f"unfold(), g.V().has('{User.LABEL}', 'id', '{data['user']}')" + \
+            f".addE('{UserHoldsAccount.LABEL}')" + \
+            f".to(g.V().has('{Account.LABEL}'," + \
+            f"'id', '{account.id}')).property('relationType', 'secondary'))"
+        holds_edge = client.submit(query).all().result()
+
+        response = UserListSchema().dumps(
+            User.filter(id=data["user"])[0]).data
+        return jsonify_response(json.loads(response), 201)
+
+    # TODO: Add is account admin permission
     @jwt_required
     @permissions.account_held_by_user
     def delete(self, account=None, user=None, account_id=None):
-        """ Endpoint used for removing a User-Account edge """
+        """ Endpoint used for removing a User-Admin edge """
+        print(request.data)
         data = json.loads(request.data)
         target_user = data["user"]
 
-        edge = UserHoldsAccount.filter(outv_id=target_user, inv_id=account.id)
+        admin_edge = UserIsAccountAdmin.filter(outv_id=target_user,
+                                         inv_id=account.id)
 
-        if not edge:
+        if not admin_edge:
             return jsonify_response({
                 "error": "No edge exists between the targeted user and account"
             }, 404)
 
         try:
-            edge[0].delete()
+            admin_edge[0].delete()
         except ObjectCanNotBeDeletedException as e:
             return jsonify_response({
                 "error": e.message
@@ -254,6 +272,37 @@ class AddRemoveUserFromAccountView(RetrieveUpdateAPIView):
         response = AccountDetailSchema().dumps(account).data
         return jsonify_response(json.loads(response), 200)
 
-auth_app.add_url_rule("/account/<account_id>/add_remove_user",
-                      view_func=AddRemoveUserFromAccountView.as_view(
+auth_app.add_url_rule("/account/<account_id>/admins",
+                      view_func=RetrieveCreateRemoveAccountAdminsView.as_view(
                           "add_remove_user_from_account"))
+
+
+class UserListView(MethodView):
+    """ Endpoint that provides a LIST GET for users;
+        mainly used for search purposes
+    """
+    @jwt_required
+    def get(self):
+        """ Returns the account matching the account id in the url with
+            it's admins
+        """
+        queries = {"wildcard_properties": []}
+
+        fullname_query = request.args.get("fullName", None)
+        email_query = request.args.get("email", None)
+
+        if fullname_query:
+            queries["fullName"] = f"TextP.startingWith('{fullname_query}')"
+            queries["wildcard_properties"].append("fullName")
+        if email_query:
+            queries["fullName"] = f"TextP.startingWith('{email_query}')"
+            queries["wildcard_properties"].append("email")
+
+        users = User.filter(limit=10, **queries)
+        response = UserListSchema(many=True).dumps(users).data
+
+        return jsonify_response(json.loads(response), 200)
+
+auth_app.add_url_rule("/users",
+                      view_func=UserListView.as_view(
+                          "users_search"))

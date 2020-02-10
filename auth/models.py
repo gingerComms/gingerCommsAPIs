@@ -68,6 +68,19 @@ class UserIsAccountAdmin(Edge):
 
         return [User.vertex_to_instance(i) for i in result]
 
+    def delete(self):
+        """ Overwritten to provide custom validation before deleting the
+            edge; making sure that an admin can't be removed from
+            his primary account
+        """
+        holds_edge = UserHoldsAccount.filter(
+            outv_id=self.outV, inv_id=self.inV)[0]
+        if holds_edge.relationType == "primary":
+            raise ObjectCanNotBeDeletedException(
+                "Can not remove a User-Admin from a primary Account")
+
+        return super().delete()
+
 
 class AccountOwnsTeam(Edge):
     """ Represents an ownership of a Team by an Account (Account -> Team).

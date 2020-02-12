@@ -138,7 +138,7 @@ class ListCreateCoreVertexView(MethodView):
             "template": {
                 "id": template.id,
                 "name": template.name,
-                "canHaveChildren": template.canHaveChildren,
+                "canHaveChildren": True if template.canHaveChildren == "True" else False,
                 "pillForegroundColor": template.pillForegroundColor,
                 "pillBackgroundColor": template.pillBackgroundColor
             }

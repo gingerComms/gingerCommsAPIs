@@ -186,6 +186,7 @@ class Account(Vertex):
     LABEL = "account"
     properties = {
         "title": str,
+        "avatarLink": str
     }
 
     @classmethod

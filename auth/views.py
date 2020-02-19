@@ -5,7 +5,7 @@ from .models import *
 from .serializers import *
 from . import permissions
 from utils.general_utils import *
-from utils.generic_views import RetrieveUpdateAPIView
+from utils.generic_views import RetrieveUpdateAPIView, UpdateAPIView
 from flask_jwt_extended import (
     jwt_required, get_jwt_identity,
     create_access_token
@@ -16,6 +16,7 @@ from db.exceptions import (
     CustomValidationFailedException,
     ObjectCanNotBeDeletedException
 )
+from utils.s3_engine import S3Engine
 
 
 auth_app = Blueprint("auth", __name__)
@@ -181,6 +182,64 @@ auth_app.add_url_rule("/accounts/",
                           "list_create_accounts"))
 
 
+class UpdateAccountView(UpdateAPIView):
+    """ Provides functionality for full/partial updates of an
+        account's details through PUT/PATCH methods
+    """
+    serializer_class = AccountDetailSchema
+    vertex_class = Account
+
+    def get_vertex_id(self):
+        return request.view_args["account_id"]
+
+    # TODO: Add is account admin permission
+    @jwt_required
+    @permissions.account_held_by_user
+    def put(self, account=None, user=None, account_id=None):
+        """ Overridden to add the permission decorator """
+        return super().put()
+
+    # TODO: Add is account admin permission
+    @jwt_required
+    @permissions.account_held_by_user
+    def patch(self, account=None, user=None, account_id=None):
+        """ Overridden to add the permission decorator """
+        return super().patch()
+
+auth_app.add_url_rule("/account/<account_id>",
+                      view_func=UpdateAccountView.as_view(
+                          "update_account"))
+
+
+class UploadAccountAvatarView(MethodView):
+    """ Endpoint providing functionality for uploading (and overwriting)
+        the given account's avatar
+    """
+    # TODO: Add is account admin permission
+    @jwt_required
+    @permissions.account_held_by_user
+    def put(self, account=None, user=None, account_id=None):
+        """ Overridden to add the permission decorator """
+        file = request.files.get('file')
+        filename = f"{account_id}/avatar.img"
+
+        engine = S3Engine()
+        url = engine.put_object(filename, file.read())
+        Account.update(vertex_id=account_id,
+                       validated_data={"avatarLink": url})
+
+        return jsonify_response({
+            "id": account.id,
+            "title": account.title,
+            "avatarLink": url
+        })
+
+
+auth_app.add_url_rule("/account/<account_id>/avatar",
+                      view_func=UploadAccountAvatarView.as_view(
+                          "upload_account_avatar"))
+
+
 class RetrieveCreateRemoveAccountAdminsView(RetrieveUpdateAPIView):
     """ Provides functionality to add, remove and list Users who hold
         an admin position for the given account through the
@@ -200,7 +259,9 @@ class RetrieveCreateRemoveAccountAdminsView(RetrieveUpdateAPIView):
     @jwt_required
     @permissions.account_held_by_user
     def get(self, account=None, user=None, account_id=None):
-        """ Overwritten to add the required User-holds-account permission """
+        """ Overwritten to add the required User-holds-account permission
+            - Returns the account detail for the given account
+        """
         self.get_object = lambda: account
         return super().get()
 

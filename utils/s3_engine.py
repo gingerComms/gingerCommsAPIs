@@ -3,6 +3,9 @@ import os
 import base64
 
 
+region_name = "ap-southeast-2"
+
+
 def establish_conn(resource_name):
     """ Establishes and returns a resource object through the credentials
         present in the environment
@@ -10,7 +13,7 @@ def establish_conn(resource_name):
     AWS_CREDS = {
         "aws_secret_access_key": os.environ["AWS_SECRET"],
         "aws_access_key_id": os.environ["AWS_ACCESS"],
-        "region_name": "ap-southeast-2"
+        "region_name": region_name
     }
     session = boto3.session.Session(**AWS_CREDS)
     client = session.client(
@@ -50,3 +53,15 @@ class S3Engine:
             Bucket=self.bucket_name,
             Key=f"{filename}"
         )
+
+    def put_object(self, filename, file, acl="public-read"):
+        params = {
+            "Bucket": self.bucket_name,
+            "Key": filename,
+            "Body": file,
+            "ACL": acl
+        }
+        response = self.client.put_object(**params)
+
+        url = f"http://s3-{region_name}.amazonaws.com/{self.bucket_name}/{filename}"
+        return url

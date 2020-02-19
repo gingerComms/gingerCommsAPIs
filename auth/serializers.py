@@ -24,6 +24,7 @@ class AccountDetailSchema(Schema):
     """
     id = fields.Str(required=False)
     title = fields.Str(required=True)
+    avatarLink = fields.Str(required=False, default=None)
     users = fields.Method("get_account_users")
     admins = fields.Nested(UserListSchema(many=True),
                            many=True, required=False)
@@ -44,5 +45,6 @@ class AccountsListSchema(Schema):
     """ List schema for account instances with only the required details """
     id = fields.Str(required=False)
     title = fields.Str(required=True)
+    avatarLink = fields.Str(required=False, default=None)
     admins = fields.Nested(UserListSchema(many=True),
                            many=True, required=False)

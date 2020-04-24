@@ -21,4 +21,4 @@ services:
     volumes:
       - .:/vpmo_gremlin
   cosmos_emulator:
-    image: Microsoft/azure-cosmosdb-emulator
+    image: microsoft/azure-cosmosdb-emulator

@@ -1,0 +1,24 @@
+version: "3"
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - cosmos_emulator
+    ports:
+      - "5000:5000"
+    restart: always
+    environment:
+      - DB_HOST
+      - DB_USERNAME
+      - DB_PASSWORD
+      - DB_PARTITION_KEY
+      - SECRET_KEY
+      - AWS_ACCESS
+      - AWS_SECRET
+      - AWS_BUCKET
+    volumes:
+      - .:/vpmo_gremlin
+  cosmos_emulator:
+    image: Microsoft/azure-cosmosdb-emulator

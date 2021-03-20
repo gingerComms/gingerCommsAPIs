@@ -15,7 +15,7 @@ Flask-Testing==0.7.1
 gremlinpython==3.4.2
 isodate==0.6.0
 itsdangerous==1.1.0
-Jinja2==2.10.1
+Jinja2==2.11.3
 jmespath==0.9.4
 MarkupSafe==1.1.1
 marshmallow==2.19.5
